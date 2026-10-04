@@ -24,6 +24,7 @@ if (!KEY) {
 }
 
 fs.mkdirSync(path.join(DATA, "photos"), { recursive: true });
+fs.mkdirSync(path.join(DATA, "tagimg"), { recursive: true });
 const db = new DatabaseSync(path.join(DATA, "scout.db"));
 db.exec(`
   PRAGMA journal_mode = WAL;
@@ -31,6 +32,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS photos  (id TEXT PRIMARY KEY, code TEXT NOT NULL, part TEXT NOT NULL, scout TEXT, ts INTEGER NOT NULL, bytes INTEGER);
   CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, code TEXT NOT NULL, matchKey TEXT, ts INTEGER NOT NULL, body TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS matches (key TEXT PRIMARY KEY, fetched INTEGER NOT NULL, body TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS investigations (id TEXT PRIMARY KEY, code TEXT NOT NULL, ts INTEGER NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, matchKey TEXT, ts INTEGER NOT NULL, priority REAL, body TEXT NOT NULL, answer TEXT, answeredBy TEXT, answeredTs INTEGER);
   CREATE INDEX IF NOT EXISTS entries_code ON entries(code);
   CREATE INDEX IF NOT EXISTS obs_code ON observations(code);
   CREATE INDEX IF NOT EXISTS photos_code ON photos(code);
@@ -102,7 +105,8 @@ function interestNow(data) {
   const d = data || { matches: [], rankings: [] };
   const schedule = ourMatches(d.matches || [], OUR);
   const alliance = projectedAlliance(d.rankings || [], OUR, d.alliances_round_robin || []);
-  return matchesOfInterest({ matches: d.matches || [], schedule, alliance, finalsAlliances: d.alliances_finals || [], our: OUR });
+  const investigated = db.prepare("SELECT DISTINCT code FROM investigations WHERE status != 'failed'").all().map((r) => r.code);
+  return matchesOfInterest({ matches: d.matches || [], schedule, alliance, finalsAlliances: d.alliances_finals || [], our: OUR, investigated });
 }
 
 function state() {
@@ -115,6 +119,9 @@ function state() {
   const res = research().teams || {};
   const obsBy = {};
   for (const o of db.prepare("SELECT code, body FROM observations ORDER BY ts DESC").all()) (obsBy[o.code] ??= []).push(JSON.parse(o.body));
+  const invBy = {};
+  for (const r of db.prepare("SELECT code, body FROM investigations ORDER BY ts").all()) invBy[r.code] = JSON.parse(r.body);
+  const openTags = db.prepare("SELECT COUNT(*) AS n FROM tags WHERE answer IS NULL").get().n;
   const archived = Object.fromEntries(db.prepare("SELECT key, body FROM matches").all().map((r) => [r.key, JSON.parse(r.body)]));
   const teams = {};
   for (const [code, h] of Object.entries(history.teams)) {
@@ -127,6 +134,7 @@ function state() {
       photos: photosBy[code] || [],
       observations: obsBy[code] || [],
       stats: stats.teams[code] || null,
+      investigation: invBy[code] || null,
     };
   }
   // Teams we hold data on but that are missing from history.json (a late
@@ -149,6 +157,7 @@ function state() {
     teams, schedule, ranks, prio: priorityList(teams, schedule, ranks, OUR),
     standing: standing(liveData.rankings || [], liveData.matches || [], OUR),
     alliance: projectedAlliance(liveData.rankings || [], OUR, liveData.alliances_round_robin || []),
+    openTags,
   };
 }
 
@@ -226,6 +235,73 @@ async function handle(req, res) {
         .run(o.id, o.code, String(o.matchKey || ""), Number(o.ts) || Date.now(), JSON.stringify(o));
       return send(res, 200, { ok: true });
     }
+    // --- deeper investigation of one team: queued by the app, run by a worker on archserver
+    if (p === "/api/investigate" && req.method === "POST") {
+      const b = JSON.parse((await body(req, 8 * 1024)).toString());
+      if (!CODE.test(b.code || "")) return send(res, 400, { error: "bad code" });
+      const open = db.prepare("SELECT body FROM investigations WHERE code = ? AND status IN ('queued','running')").get(b.code);
+      if (open) return send(res, 200, JSON.parse(open.body));
+      const inv = { id: crypto.randomUUID().replace(/-/g, ""), code: b.code, note: String(b.note || "").slice(0, 500), requestedBy: String(b.scout || "").slice(0, 60), ts: Date.now(), status: "queued" };
+      db.prepare("INSERT INTO investigations (id, code, ts, status, body) VALUES (?, ?, ?, ?, ?)").run(inv.id, inv.code, inv.ts, inv.status, JSON.stringify(inv));
+      return send(res, 200, inv);
+    }
+    if (p === "/api/investigations" && req.method === "GET") {
+      const st = url.searchParams.get("status");
+      const rows = st ? db.prepare("SELECT body FROM investigations WHERE status = ? ORDER BY ts").all(st) : db.prepare("SELECT body FROM investigations ORDER BY ts DESC LIMIT 200").all();
+      return send(res, 200, { investigations: rows.map((r) => JSON.parse(r.body)) });
+    }
+    const invM = /^\/api\/investigation\/([a-f0-9]{32})$/.exec(p);
+    if (invM && req.method === "POST") {
+      const row = db.prepare("SELECT body FROM investigations WHERE id = ?").get(invM[1]);
+      if (!row) return send(res, 404, { error: "no such investigation" });
+      const u = JSON.parse((await body(req, 256 * 1024)).toString());
+      if (!["running", "done", "failed"].includes(u.status)) return send(res, 400, { error: "bad status" });
+      const inv = { ...JSON.parse(row.body), status: u.status, updated: Date.now(), ...(u.report ? { report: u.report } : {}), ...(u.error ? { error: String(u.error).slice(0, 2000) } : {}) };
+      db.prepare("UPDATE investigations SET status = ?, body = ? WHERE id = ?").run(inv.status, JSON.stringify(inv), inv.id);
+      return send(res, 200, { ok: true });
+    }
+
+    // --- human-in-the-loop robot identity: fgc-vision asks, scouts answer in the app
+    if (p === "/api/tag-image" && req.method === "POST") {
+      const id = url.searchParams.get("id") || "";
+      if (!ID.test(id)) return send(res, 400, { error: "bad id" });
+      const buf = await body(req, MAX_PHOTO);
+      if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return send(res, 400, { error: "jpeg only" });
+      fs.writeFileSync(path.join(DATA, "tagimg", `${id}.jpg`), buf);
+      return send(res, 200, { ok: true });
+    }
+    const tiM = /^\/api\/tag-image\/([A-Za-z0-9_-]{8,64})\.jpg$/.exec(p);
+    if (tiM && req.method === "GET") {
+      const f = path.join(DATA, "tagimg", `${tiM[1]}.jpg`);
+      if (!fs.existsSync(f)) return send(res, 404, { error: "no image" });
+      res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" });
+      return fs.createReadStream(f).pipe(res);
+    }
+    if (p === "/api/tag-request" && req.method === "POST") {
+      const r = JSON.parse((await body(req, 32 * 1024)).toString());
+      if (!ID.test(r.id || "") || !Array.isArray(r.candidates) || !r.candidates.every((c) => CODE.test(c))) return send(res, 400, { error: "bad id or candidates" });
+      db.prepare("INSERT OR IGNORE INTO tags (id, matchKey, ts, priority, body) VALUES (?, ?, ?, ?, ?)")
+        .run(r.id, String(r.matchKey || ""), Date.now(), Number(r.priority) || 0, JSON.stringify(r));
+      return send(res, 200, { ok: true });
+    }
+    if (p === "/api/tags" && req.method === "GET") {
+      const open = url.searchParams.get("open") === "1";
+      const mk = url.searchParams.get("matchKey");
+      let rows;
+      if (open) rows = db.prepare("SELECT * FROM tags WHERE answer IS NULL ORDER BY priority DESC, ts LIMIT 50").all();
+      else if (mk) rows = db.prepare("SELECT * FROM tags WHERE matchKey = ? ORDER BY ts").all(mk);
+      else rows = db.prepare("SELECT * FROM tags WHERE answer IS NOT NULL ORDER BY answeredTs DESC LIMIT 500").all();
+      return send(res, 200, { tags: rows.map((r) => ({ ...JSON.parse(r.body), answer: r.answer, answeredBy: r.answeredBy, answeredTs: r.answeredTs })) });
+    }
+    if (p === "/api/tag-answer" && req.method === "POST") {
+      const a = JSON.parse((await body(req, 4096)).toString());
+      if (!ID.test(a.id || "") || !(CODE.test(a.answer || "") || ["none", "unsure"].includes(a.answer))) return send(res, 400, { error: "bad id or answer" });
+      // First answer wins; "unsure" leaves it open for someone else.
+      if (a.answer === "unsure") return send(res, 200, { ok: true, kept: "open" });
+      const r = db.prepare("UPDATE tags SET answer = ?, answeredBy = ?, answeredTs = ? WHERE id = ? AND answer IS NULL").run(a.answer, String(a.scout || "").slice(0, 60), Date.now(), a.id);
+      return send(res, 200, { ok: true, recorded: r.changes === 1 });
+    }
+
     if (p === "/api/entry" && req.method === "POST") {
       const e = JSON.parse((await body(req, 64 * 1024)).toString());
       if (!ID.test(e.id || "") || !CODE.test(e.code || "")) return send(res, 400, { error: "bad id or code" });

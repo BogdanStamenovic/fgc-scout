@@ -292,6 +292,42 @@ function renderFind() {
   run();
 }
 
+function investigationCard(t) {
+  const inv = t.investigation;
+  const btn = `<input type="text" id="invnote" placeholder="What should it look into? (optional)"><p></p><button class="primary" id="invgo">Investigate ${esc(t.code)} more thoroughly</button>`;
+  if (!inv) return `<div class="card">${btn}<p class="small muted">Deeper web research plus every one of their matches through the commentary pipeline. The report appears here.</p></div>`;
+  if (inv.status === "queued" || inv.status === "running") return `<div class="card small">🔎 Investigation <b>${esc(inv.status)}</b> (asked by ${esc(inv.requestedBy || "?")}, ${ago(new Date(inv.ts).toISOString())}).${inv.note ? ` Focus: ${esc(inv.note)}` : ""}</div>`;
+  if (inv.status === "failed") return `<div class="card small">Investigation failed: ${esc(inv.error || "unknown")}<p></p>${btn}</div>`;
+  const r = inv.report || {};
+  return `<div class="card"><b>Investigation report</b> <span class="small muted">${ago(new Date(inv.updated || inv.ts).toISOString())}</span>
+    <p>${esc(r.summary || "")}</p>
+    ${(r.sections || []).map((s) => `<details><summary>${esc(s.title)}</summary><p class="small">${esc(s.text)}</p></details>`).join("")}
+    ${(r.sources || []).map((s) => `<div class="small"><a href="${esc(s.url)}" target="_blank" rel="noopener">source</a> · ${esc(s.what || "")}</div>`).join("")}
+    <p></p>${btn}</div>`;
+}
+
+async function renderTag() {
+  setTab("tag");
+  let tags = [];
+  try { tags = (await api("/api/tags?open=1")).tags; } catch { view.innerHTML = `<p class="muted">Tagging needs a connection.</p>`; return; }
+  if (!tags.length) { view.innerHTML = `<h1>Tag robots</h1><p class="muted">Nothing to tag right now. When the video tracker is unsure which robot is which, the question shows up here.</p>`; return; }
+  const q = tags[0];
+  const name = (c) => esc(STATE.teams[c]?.name || c);
+  view.innerHTML = `<h1>Tag robots</h1><p class="small muted">${tags.length} open. ${esc(q.matchKey || "")}${q.t != null ? ` at ${Math.round(q.t)} s` : ""}</p>
+    <div class="card"><p><b>${esc(q.prompt || "Which team's robot is in the box?")}</b></p>
+    ${q.imageId ? `<img src="/api/tag-image/${esc(q.imageId)}.jpg" style="width:100%;border-radius:10px" alt="robot to identify">` : ""}
+    ${q.context ? `<p class="small muted">${esc(q.context)}</p>` : ""}
+    <div class="list" id="opts">${q.candidates.map((c) => `<button data-a="${c}">${name(c)} <span class="code">${c}</span></button>`).join("")}
+    <button data-a="none">Not a robot / nothing there</button><button data-a="unsure">Can't tell — skip</button></div></div>`;
+  view.querySelectorAll("#opts button").forEach((b) => (b.onclick = async () => {
+    try {
+      await api("/api/tag-answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: q.id, answer: b.dataset.a, scout: ls.get("scout", "") }) });
+    } catch { toast("Not sent — check the connection"); return; }
+    if (b.dataset.a === "unsure") ls.set(`skip:${q.id}`, 1);
+    renderTag();
+  }));
+}
+
 function renderTeam(code) {
   setTab("");
   const t = STATE.teams[code];
@@ -305,6 +341,7 @@ function renderTeam(code) {
     <h1>${esc(t.name)} <span class="code">${code}</span></h1>
     ${p ? `<p class="small muted">Priority ${p.priority} · strength ${p.strength}/100 (${esc(p.strengthSource)}) ${tags(p)}${p.missing.length ? `<br>Still needed: <b>${esc(p.missing.join(", "))}</b>` : ""}</p>` : ""}
 
+    ${investigationCard(t)}
     <h2>Known so far</h2>
     <div class="card"><dl class="kv">
       ${SYSTEMS.map(([k, l]) => `<dt>${l}</dt><dd>${yn(f[k]?.has)}${k === "climb" && f.climb?.zone ? ` (zone ${esc(f.climb.zone)})` : ""}</dd>`).join("")}
@@ -381,6 +418,14 @@ function renderTeam(code) {
       ${(r.sources || []).map((s) => `<div class="small"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.label)}</a> · ${esc(s.what)}</div>`).join("")}
       <p class="small"><a href="${esc(t.page)}" target="_blank" rel="noopener">Official team page</a></p>` : `<p class="muted">No research yet.</p>`}</div>`;
 
+  const ig = $("#invgo");
+  if (ig) ig.onclick = async () => {
+    try {
+      await api("/api/investigate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, note: $("#invnote")?.value || "", scout: ls.get("scout", "") }) });
+      toast("Investigation queued");
+      refresh();
+    } catch { toast("Not sent — needs a connection"); }
+  };
   const form = $("#f");
   const choice = { ...Object.fromEntries(SYSTEMS.map(([k]) => [k, val(`systems.${k}.has`, null)])), hookSpace: val("hookSpace.has", null) };
   form.querySelectorAll(".yn").forEach((g) => g.querySelectorAll("button").forEach((b) => (b.onclick = () => {
@@ -435,9 +480,12 @@ async function refresh() {
   if (m) renderTeam(m[1]);
   else if (h === "#/matches") renderMatches();
   else if (h === "#/find") renderFind();
+  else if (h === "#/tag") renderTag();
   else if (h === "#/") renderTeams();
   else renderNext();
   syncBadge();
+  const tn = $("#tagn");
+  if (tn) tn.textContent = STATE.openTags ? ` (${STATE.openTags})` : "";
 }
 addEventListener("hashchange", refresh);
 // Updates: the server stamps sw.js with a hash of the app, so a deploy means a

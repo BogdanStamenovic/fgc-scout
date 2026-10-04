@@ -1,0 +1,9 @@
+[Unit]
+Description=Check the scout app for investigation requests every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

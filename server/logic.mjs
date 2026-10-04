@@ -213,9 +213,10 @@ export function projectedAlliance(rankings, our, official) {
 }
 
 // Played matches worth watching on video, highest priority first.
-export function matchesOfInterest({ matches, schedule, alliance, finalsAlliances, our }) {
+export function matchesOfInterest({ matches, schedule, alliance, finalsAlliances, our, investigated = [] }) {
   const want = {}; // code -> [priority, reason]
   const add = (code, p, why) => { if (code && code !== our && (!want[code] || want[code][0] < p)) want[code] = [p, why]; };
+  for (const c of investigated) add(c, 90, "investigation requested");
   for (const c of alliance?.members || []) add(typeof c === "string" ? c : c.code, 80, "alliance partner");
   for (const al of finalsAlliances || []) for (const k of ["captain", "pick1", "pick2", "pick3"]) add(al[k]?.team?.country, 70, "finalist");
   for (const m of schedule.filter((x) => !x.played)) {

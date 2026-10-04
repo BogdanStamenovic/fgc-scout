@@ -1,0 +1,8 @@
+[Unit]
+Description=fgc-scout: run queued team investigations (archserver)
+
+[Service]
+Type=oneshot
+EnvironmentFile=/mnt/offload/fgc-matchwatch/matchwatch.env
+ExecStart=/usr/bin/flock -n /tmp/fgc-investigate.lock /usr/bin/python3 %h/data/fgc-scout/worker/investigate.py
+TimeoutStartSec=3h

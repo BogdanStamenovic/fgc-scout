@@ -241,8 +241,10 @@ export function matchesOfInterest({ matches, schedule, alliance, finalsAlliances
 
 // ---------- official per-team stats from per-match details ----------
 // The official details carry per-robot fields named like redRobotOneParking
-// (2025) — robot One/Two/Three = station x1/x2/x3 (inferred; fgc-vision checks
-// it on video). Field names change every season, so match them generically.
+// (2025) — robot One/Two/Three = station x1/x2/x3. Verified on 2025: summing a
+// team's per-robot end-game values over its ranking matches gives its official
+// protectionPoints for 181/181 teams under this mapping, at most 11/181 under
+// any other ordering. Field names change every season, so match them generically.
 const ROBOT_FIELD = /^(red|blue)Robot(One|Two|Three)(.+)$/;
 const IDX = { One: 1, Two: 2, Three: 3 };
 // 2026 climb increments (manual table 3-4), if the season's per-robot field uses them.

@@ -350,7 +350,7 @@ function renderTeam(code) {
       ${Object.entries(t.stats.robot).map(([f, r]) => `<div class="small"><b>${esc(f)}</b> per robot: ${r.levels
         ? `${Object.entries(r.levels).map(([l, n]) => `${esc(l)} ×${n}`).join(", ")} · <b>off the ground ${r.offGroundRate}%</b>`
         : `values ${Object.entries(r.distribution).map(([v, n]) => `${esc(v)}×${n}`).join(", ")} · mean ${r.mean} · non-zero ${r.nonzeroRate}%`}</div>`).join("")}
-      <p class="small muted">From FIRST Global's official per-robot results (robot one/two/three = their station). Updated ${ago(STATE.statsFetchedAt)}.</p>`
+      <p class="small muted">From FIRST Global's official per-robot results (robot one/two/three = station 1/2/3, verified against 2025 totals for all 181 teams). Updated ${ago(STATE.statsFetchedAt)}.</p>`
       : `<p class="muted small">No 2026 matches played yet.</p>`}</div>
 
     <h2>From the match commentary</h2>

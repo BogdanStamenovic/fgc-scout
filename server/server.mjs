@@ -111,6 +111,14 @@ function state() {
       observations: obsBy[code] || [],
     };
   }
+  // Teams we hold data on but that are missing from history.json (a late
+  // entry, or a code the nations list spells differently) must still show up.
+  for (const code of new Set([...Object.keys(byCode), ...Object.keys(obsBy), ...Object.keys(photosBy)])) {
+    if (teams[code]) continue;
+    teams[code] = { code, name: code, page: null, history: { pastScore: null, predictedRank: null, predictedOf: null, seasons: [] },
+      research: res[code] || null, scouted: mergeEntries(byCode[code] || []), entries: (byCode[code] || []).length,
+      photos: photosBy[code] || [], observations: obsBy[code] || [] };
+  }
   const liveData = live.data || { matches: [], rankings: [] };
   const schedule = ourMatches(liveData.matches || [], OUR);
   const ranks = {};

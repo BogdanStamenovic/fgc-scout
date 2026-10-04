@@ -1,0 +1,22 @@
+[Unit]
+Description=fgc-scout (FGC 2026 scouting API + PWA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fgcscout
+WorkingDirectory=/opt/fgc-scout/app
+EnvironmentFile=/opt/fgc-scout/env
+Environment=SCOUT_DATA=/opt/fgc-scout/data
+Environment=PORT=3077
+ExecStart=/usr/bin/node server/server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/fgc-scout/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+{
+ "_why": "Claims fgc-2026 (Opus) checked against the cited source text on 2026-10-04. 'checked' is shown in the app next to the claim.",
+ "GBR": {
+  "checked": "shooter+intake confirmed in cited article: 'designed to collect balls before shooting them into the air'"
+ },
+ "GUM": {
+  "robot": {
+   "shooter": null
+  },
+  "checked": "REFUTED shooter: the team page's 'human shooter' is a human-player role, not a robot mechanism"
+ },
+ "BAN": {
+  "checked": "PARTIAL: cited article shows exhibition prototypes that climb pipes and launch balls, not necessarily the competition robot"
+ },
+ "SEY": {
+  "checked": "UNVERIFIED: cited article did not load for the checker"
+ },
+ "LUX": {
+  "checked": "shooter confirmed ('apprendre à lancer ses balles un peu plus haut', 3 weeks before the event); climb claim not found in the article text"
+ },
+ "ITA": {
+  "checked": "shooter confirmed: team's own release notes mention the flywheel"
+ },
+ "ANT": {
+  "checked": "intake+climb confirmed: 'designed to collect, store, lift, climb and score game elements'"
+ },
+ "CPV": {
+  "checked": "shooter confirmed ('começar a disparar'); climb not found in the snippet checked"
+ },
+ "BHU": {
+  "checked": "shooter+intake confirmed: mentor quote 'fine-tune the robot, like the launcher, collector' (BBS)"
+ },
+ "COK": {
+  "checked": "shooter+intake+climb confirmed: 'collect balls, shoot them to a set height and then balance itself along a raised pole'"
+ }
+}

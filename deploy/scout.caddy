@@ -1,0 +1,14 @@
+# fgc-scout: its own site block, imported from /etc/caddy/Caddyfile.
+# sslip.io resolves this name to the server's IP, so no DNS record is needed.
+scout.208-113-209-196.sslip.io {
+	encode zstd gzip
+	request_body {
+		max_size 9MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+	reverse_proxy 127.0.0.1:3077
+}

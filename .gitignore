@@ -1,0 +1,4 @@
+data/
+research/out/
+node_modules/
+*.db

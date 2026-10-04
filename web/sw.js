@@ -4,7 +4,8 @@
 // IndexedDB outbox in app.js.
 const VERSION = "__VERSION__";
 const SHELL = `shell-${VERSION}`;
-const FILES = ["/", "/index.html", "/app.js", "/app.css", "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png"];
+const FONTS = ["Barlow-400", "Barlow-500", "Barlow-600", "BarlowSemiCondensed-600", "BarlowSemiCondensed-700"].flatMap((f) => [`/fonts/${f}-latin.woff2`, `/fonts/${f}-latin-ext.woff2`]);
+const FILES = ["/", "/index.html", "/app.js", "/app.css", "/fonts/fonts.css", ...FONTS, "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png"];
 self.addEventListener("install", (e) => e.waitUntil(
   caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting())
 ));

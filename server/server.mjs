@@ -199,10 +199,14 @@ function body(req, limit) {
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
 const CODE = /^[A-Z]{3}$/;
 const PART = /^(robot|shooter|intake|climb|partnerClimb|hooks|other)$/;
-const SHELL_VERSION = crypto.createHash("sha256")
-  .update(fs.readdirSync(WEB).sort().map((f) => fs.readFileSync(path.join(WEB, f))).reduce((a, b) => Buffer.concat([a, b]), Buffer.alloc(0)))
-  .digest("hex").slice(0, 12);
-const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json" };
+const shellFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).sort((x, y) => x.name.localeCompare(y.name))
+  .flatMap((e) => (e.isDirectory() ? shellFiles(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+const SHELL_VERSION = (() => {
+  const h = crypto.createHash("sha256");
+  for (const f of shellFiles(WEB)) h.update(f.slice(WEB.length)).update(fs.readFileSync(f));
+  return h.digest("hex").slice(0, 12);
+})();
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json", ".woff2": "font/woff2" };
 
 async function handle(req, res) {
   const url = new URL(req.url, "http://x");

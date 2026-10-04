@@ -64,3 +64,15 @@ table.hist { width: 100%; border-collapse: collapse; font-size: 14px; font-varia
 table.hist td, table.hist th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; }
 .toast { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 16px); padding: 12px 14px; border-radius: 12px; background: var(--text); color: var(--bg); text-align: center; z-index: 20; }
 a { color: var(--accent); }
+
+.update { margin: 0 16px 8px; padding: 12px; border-radius: 12px; background: var(--accent); color: #fff; text-align: center; font-weight: 600; cursor: pointer; }
+.stand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.stand b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stand span { font-size: 12px; color: var(--muted); }
+details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.filters label { font-size: 13px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chips button.on { border-color: var(--accent); color: var(--accent); }
+.obs { border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; margin: 10px 0; font-size: 14px; }
+

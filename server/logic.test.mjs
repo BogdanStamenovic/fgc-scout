@@ -82,3 +82,71 @@ test("live 2026 rank takes over from past seasons as matches are played", () => 
   assert.equal(list[0].code, "BBB");
   assert.match(list[0].strengthSource, /2026 rank 1/);
 });
+
+import { dropLowestAvg, neededAverage, standing, allianceForRank, projectedAlliance, matchesOfInterest } from "./logic.mjs";
+
+test("drop-lowest average", () => {
+  assert.equal(dropLowestAvg([10, 50, 30]), 40);
+  assert.equal(dropLowestAvg([7]), 7);
+  assert.equal(dropLowestAvg([]), null);
+});
+
+test("needed average is the smallest whole score that reaches the target", () => {
+  // scores 40, 60 (dropped 40 -> 60). Two more matches; target 80: need x with avg(60,x,x)>=80 -> x=90
+  assert.deepEqual(neededAverage([40, 60], 2, 80), { need: 90 });
+  assert.deepEqual(neededAverage([90, 95], 1, 50), { need: 0 });
+  assert.deepEqual(neededAverage([10], 0, 50), { done: true, reached: false });
+});
+
+test("table 6-1 alliance mapping", () => {
+  assert.deepEqual(allianceForRank(1), { alliance: 1, ranks: [1, 9, 24] });
+  assert.deepEqual(allianceForRank(9), { alliance: 1, ranks: [1, 9, 24] });
+  assert.deepEqual(allianceForRank(24), { alliance: 1, ranks: [1, 9, 24] });
+  assert.deepEqual(allianceForRank(13), { alliance: 5, ranks: [5, 13, 20] });
+  assert.deepEqual(allianceForRank(17), { alliance: 8, ranks: [8, 16, 17] });
+  assert.equal(allianceForRank(25), null);
+  // every rank 1..24 appears in exactly one alliance
+  const seen = new Set();
+  for (let a = 1; a <= 8; a++) for (const r of allianceForRank(a).ranks) seen.add(r);
+  assert.equal(seen.size, 24);
+});
+
+const rk = (code, rank, score) => ({ rank, rankingScore: score, played: 3, team: { country: code } });
+
+test("projected alliance uses current ranks, official alliances win when present", () => {
+  const rankings = Array.from({ length: 30 }, (_, i) => rk(i === 12 ? "SRB" : `T${String(i + 1).padStart(2, "0")}`, i + 1, 100 - i));
+  const p = projectedAlliance(rankings, "SRB", []);
+  assert.equal(p.alliance, 5);
+  assert.deepEqual(p.members.map((m) => m.rank), [5, 13, 20]);
+  const official = [{ name: "Alliance 3", captain: { team: { country: "AAA" } }, pick1: { team: { country: "SRB" } }, pick2: { team: { country: "BBB" } }, pick3: { team: { country: "CCC" } } }];
+  assert.deepEqual(projectedAlliance(rankings, "SRB", official).members, ["AAA", "SRB", "BBB", "CCC"]);
+});
+
+test("standing: goals measured against the other teams", () => {
+  const rankings = [rk("AAA", 1, 90), rk("SRB", 2, 70), rk("BBB", 3, 60)];
+  const matches = [
+    { tournamentKey: "t2", id: 1, played: true, redScore: 60, blueScore: 10, participants: [{ station: 11, country: "SRB" }] },
+    { tournamentKey: "t2", id: 2, played: true, redScore: 5, blueScore: 80, participants: [{ station: 21, country: "SRB" }] },
+    { tournamentKey: "t2", id: 3, played: false, participants: [{ station: 12, country: "SRB" }] },
+  ];
+  const s = standing(rankings, matches, "SRB");
+  assert.deepEqual(s.scores, [60, 80]);
+  assert.equal(s.remaining, 1);
+  const top1 = s.goals.find((g) => g.top === 1);
+  assert.equal(top1.mustBeat, 90);
+  assert.equal(top1.need, 101); // avg(80, x) > 90 -> x >= 100.02 -> 101
+});
+
+test("matches of interest: our matches first, then partners' and opponents'", () => {
+  const P = (c, s) => ({ country: c, station: s });
+  const matches = [
+    { tournamentKey: "t2", id: 1, played: true, scheduledTime: "a", participants: [P("SRB", 11), P("XXX", 21)] },
+    { tournamentKey: "t2", id: 2, played: true, scheduledTime: "b", participants: [P("OPP", 11), P("ZZZ", 21)] },
+    { tournamentKey: "t2", id: 3, played: true, scheduledTime: "c", participants: [P("QQQ", 11)] },
+    { tournamentKey: "t2", id: 4, played: false, scheduledTime: "d", participants: [P("SRB", 11), P("OPP", 21)] },
+  ];
+  const schedule = [{ name: "Ranking Match 4", played: false, partners: [], opponents: ["OPP"] }];
+  const list = matchesOfInterest({ matches, schedule, alliance: null, finalsAlliances: [], our: "SRB" });
+  assert.deepEqual(list.map((m) => m.key), ["t2-1", "t2-2"]);
+  assert.equal(list[1].priority, 50);
+});

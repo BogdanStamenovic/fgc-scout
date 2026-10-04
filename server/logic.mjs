@@ -140,3 +140,101 @@ export function priorityList(teams, schedule, ranks, our) {
   }
   return list.sort((a, b) => b.priority - a.priority || b.importance - a.importance);
 }
+
+// ---------- standing, playoff math, alliances, matches of interest ----------
+
+const sideOf = (station) => (Math.floor(station / 10) === 1 ? "red" : "blue");
+
+// Ranking score = average of a team's ranking-match scores with the single
+// lowest dropped (rule M21 / 6.3). Checked on 2025 data: equals the official
+// rankingScore exactly for 172 of 181 teams; the other 9 differ by up to ~3,
+// presumably penalties or cards.
+export function dropLowestAvg(scores) {
+  if (!scores.length) return null;
+  if (scores.length === 1) return scores[0];
+  const s = [...scores].sort((a, b) => a - b).slice(1);
+  return s.reduce((a, b) => a + b, 0) / s.length;
+}
+
+export function ourRankingScores(matches, our) {
+  const played = [], remaining = [];
+  for (const m of matches) {
+    if (m.tournamentKey !== "t2") continue; // ranking matches only
+    const me = (m.participants || []).find((p) => p.country === our);
+    if (!me) continue;
+    if (m.played) played.push(sideOf(me.station) === "red" ? m.redScore : m.blueScore);
+    else remaining.push(m);
+  }
+  return { played, remaining: remaining.length };
+}
+
+// Lowest per-match average over the remaining matches that lifts our ranking
+// score to at least `target`, assuming every other team's score stays where it
+// is now (they will move, so treat this as a floor, not a guarantee).
+export function neededAverage(scores, remaining, target) {
+  if (target == null) return null;
+  if (!remaining) return { done: true, reached: (dropLowestAvg(scores) ?? 0) >= target };
+  const ok = (x) => dropLowestAvg([...scores, ...Array(remaining).fill(x)]) >= target;
+  if (ok(0)) return { need: 0 };
+  let lo = 0, hi = 1;
+  while (!ok(hi)) { hi *= 2; if (hi > 1e6) return { need: Infinity }; }
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (ok(mid)) hi = mid; else lo = mid; }
+  return { need: Math.ceil(hi) };
+}
+
+export function standing(rankings, matches, our) {
+  const rows = rankings.filter((r) => r.team).map((r) => ({ code: r.team.country, rank: r.rank, score: r.rankingScore, played: r.played, highest: r.highestScore }));
+  const me = rows.find((r) => r.code === our) || null;
+  const others = rows.filter((r) => r.code !== our).sort((a, b) => b.score - a.score);
+  const { played, remaining } = ourRankingScores(matches, our);
+  // To end in the top N we must beat the Nth best of the *other* teams.
+  const line = (n) => (others.length >= n ? others[n - 1].score : null);
+  const goals = [24, 8, 1].map((n) => ({ top: n, mustBeat: line(n), ...neededAverage(played, remaining, line(n) == null ? null : line(n) + 0.01) }));
+  return { me, teams: rows.length, scores: played, remaining, current: dropLowestAvg(played), goals };
+}
+
+// Table 6-1: alliance a (1..8) = ranks a, a+8, 25-a, plus a random draw from rank >= 25.
+export function allianceForRank(r) {
+  if (!r || r > 24) return null;
+  const a = r <= 8 ? r : r <= 16 ? r - 8 : 25 - r;
+  return { alliance: a, ranks: [a, a + 8, 25 - a] };
+}
+
+export function projectedAlliance(rankings, our, official) {
+  const theirs = (official || []).find((al) => ["captain", "pick1", "pick2", "pick3"].some((k) => al[k]?.team?.country === our));
+  if (theirs) {
+    return { official: true, name: theirs.name, members: ["captain", "pick1", "pick2", "pick3"].map((k) => theirs[k]?.team?.country).filter(Boolean) };
+  }
+  const byRank = Object.fromEntries(rankings.filter((r) => r.team).map((r) => [r.rank, r.team.country]));
+  const me = rankings.find((r) => r.team?.country === our);
+  const a = allianceForRank(me?.rank);
+  if (!a) return { official: false, alliance: null, note: me ? `rank ${me.rank}: outside the top 24, so only the random draw from rank 25+ could put us in` : "no ranking yet" };
+  return { official: false, alliance: a.alliance, members: a.ranks.map((r) => ({ rank: r, code: byRank[r] || null })), plusRandomDraw: true };
+}
+
+// Played matches worth watching on video, highest priority first.
+export function matchesOfInterest({ matches, schedule, alliance, finalsAlliances, our }) {
+  const want = {}; // code -> [priority, reason]
+  const add = (code, p, why) => { if (code && code !== our && (!want[code] || want[code][0] < p)) want[code] = [p, why]; };
+  for (const c of alliance?.members || []) add(typeof c === "string" ? c : c.code, 80, "alliance partner");
+  for (const al of finalsAlliances || []) for (const k of ["captain", "pick1", "pick2", "pick3"]) add(al[k]?.team?.country, 70, "finalist");
+  for (const m of schedule.filter((x) => !x.played)) {
+    for (const c of m.partners) add(c, 60, `partner in ${m.name}`);
+    for (const c of m.opponents) add(c, 50, `opponent in ${m.name}`);
+  }
+  const out = [];
+  for (const m of matches) {
+    if (!m.played) continue;
+    const ps = m.participants || [];
+    let priority = 0; const reasons = [];
+    if (ps.some((p) => p.country === our)) { priority = 100; reasons.push("our match"); }
+    for (const p of ps) {
+      const w = want[p.country];
+      if (w) { priority = Math.max(priority, w[0]); reasons.push(`${p.country}: ${w[1]}`); }
+    }
+    if (!priority) continue;
+    out.push({ key: `${m.tournamentKey}-${m.id}`, tournamentKey: m.tournamentKey, id: m.id, name: m.name, scheduledTime: m.scheduledTime, field: m.field ?? null,
+      participants: ps.map((p) => ({ country: p.country, station: p.station })), redScore: m.redScore, blueScore: m.blueScore, reasons, priority });
+  }
+  return out.sort((a, b) => b.priority - a.priority || String(b.scheduledTime).localeCompare(String(a.scheduledTime)));
+}

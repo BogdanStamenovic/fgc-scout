@@ -128,6 +128,33 @@ function setTab(tab) {
 }
 
 // ---------- views ----------
+const fmt = (x) => (x == null ? "–" : Math.round(x * 10) / 10);
+function standingCard(s) {
+  const st = s.standing, me = st?.me;
+  if (!me) return `<div class="card small muted">${esc(s.our)} has no 2026 ranking yet. Our rank, score and what we need to reach the playoffs appear here once ranking matches start (Thu 8 Oct).</div>`;
+  const goal = (g) => {
+    const label = g.top === 1 ? "finish #1" : g.top === 8 ? "top 8 (alliance captain)" : "top 24 (playoffs)";
+    if (g.mustBeat == null) return "";
+    if (g.done) return `<li>${label}: ${g.reached ? "reached" : "not reached"}.</li>`;
+    if (g.need === 0) return `<li>${label}: <b>safe even scoring 0</b> in the remaining ${st.remaining}.</li>`;
+    return `<li>${label}: average <b>${g.need === Infinity ? "out of reach" : g.need}</b>+ in our remaining ${st.remaining} (line now ${fmt(g.mustBeat)}).</li>`;
+  };
+  const al = s.alliance;
+  const alHtml = !al ? "" : al.official
+    ? `<p class="small"><b>${esc(al.name)}</b> (official): ${al.members.map((c) => `<a href="#/team/${c}">${esc(c)}</a>`).join(", ")}</p>`
+    : al.alliance
+      ? `<p class="small">If rankings ended now: <b>alliance ${al.alliance}</b> with ${al.members.filter((m) => m.code !== s.our).map((m) => `<a href="#/team/${m.code}">${esc(m.code)}</a> (#${m.rank})`).join(", ")} + one random draw from rank 25+ (Table 6-1).</p>`
+      : `<p class="small muted">${esc(al.note)}</p>`;
+  return `<div class="card">
+    <div class="stand"><div><b>#${me.rank}</b><span>of ${st.teams}</span></div><div><b>${fmt(me.score)}</b><span>ranking score</span></div><div><b>${st.scores.length}</b><span>played${st.remaining ? `, ${st.remaining} left` : ""}</span></div></div>
+    <ul class="small">${st.goals.map(goal).join("")}</ul>
+    <p class="small muted">Assumes everyone else stays where they are now; they won't, so read it as a minimum. Ranking score = average of our ranking matches with the lowest dropped (checked against 2025 official numbers).</p>
+    ${alHtml}</div>`;
+}
+const SCORE_HELP = `<details><summary>What do the numbers mean?</summary><p class="small">
+<b>Priority</b> (Measure next) = share of this team's fields still unknown × importance. Importance = 1 + 3 × strength, plus a big bonus if they are in one of our upcoming matches (partner more than opponent, sooner more than later). Fully measured = 0.<br>
+<b>Past score</b> (0–100) = how good the team has been at FGC 2017–2025, recent years weighted more, playoffs and finals add a little. 50 = average or no history. Weak as a forecast: tested on past seasons it picked about 1 in 3 of the top 24 right.<br>
+<b>Strength</b> = past score until the team has played 2026 matches, then their live 2026 rank takes over over their first six matches.</p></details>`;
 function showLogin() {
   setTab("");
   view.innerHTML = `
@@ -154,9 +181,10 @@ function renderNext() {
   const list = s.prio.filter((p) => p.priority > 0).slice(0, 60);
   const sched = s.schedule.filter((m) => !m.played);
   view.innerHTML = `
+    ${standingCard(s)}
     <h1>Measure next</h1>
     <p class="small muted">${sched.length ? `${sched.length} upcoming ${esc(s.our)} matches. Partners and opponents first.` : "Match schedule not published yet, so this is ranked by team strength and what is missing."}
-    Schedule checked ${ago(s.live.fetchedAt)}.</p>
+    Schedule checked ${ago(s.live.fetchedAt)}.</p>${SCORE_HELP}<p></p>
     <div class="list">${list.map((p) => `
       <a class="row" href="#/team/${p.code}">
         <span class="code">${p.code}</span>
@@ -202,9 +230,61 @@ function renderMatches() {
   const name = (c) => esc(s.teams[c]?.name || c);
   view.innerHTML = `<h1>Our matches</h1><div class="list">${s.schedule.map((m) => `
     <div class="card"><div><b>${esc(m.name)}</b> <span class="tag ${m.side}">${m.side}</span>
-      <span class="small muted">${esc(new Date(m.scheduledTime).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }))}${m.played ? ` · played ${m.redScore}–${m.blueScore}` : ""}</span></div>
+      <span class="small muted">${esc(new Date(m.scheduledTime).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }))}${m.played ? " · played" : ""}</span></div>
       <div class="small">With: ${m.partners.map((c) => `<a href="#/team/${c}">${name(c)}</a>`).join(", ")}</div>
-      <div class="small">Against: ${m.opponents.map((c) => `<a href="#/team/${c}">${name(c)}</a>`).join(", ")}</div></div>`).join("")}</div>`;
+      <div class="small">Against: ${m.opponents.map((c) => `<a href="#/team/${c}">${name(c)}</a>`).join(", ")}</div>
+      ${m.played ? `<div class="small"><b>${m.side === "red" ? m.redScore : m.blueScore}</b> us vs ${m.side === "red" ? m.blueScore : m.redScore} them</div>` : ""}
+      ${m.details ? `<details><summary>Scoring breakdown</summary><table class="hist">${Object.entries(m.details).filter(([k, v]) => typeof v === "number" || typeof v === "boolean").map(([k, v]) => `<tr><td class="small">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></details>` : ""}</div>`).join("")}</div>`;
+}
+
+function renderFind() {
+  setTab("find");
+  const f = ls.get("find", {});
+  view.innerHTML = `
+    <h1>Find robots</h1>
+    <p class="small muted">Search everything scouted and researched. Empty boxes are ignored. Robots with an unknown value are hidden only when that filter is set.</p>
+    <div class="filters">
+      <label>Weight from (kg)<input type="text" inputmode="decimal" name="wmin" value="${esc(f.wmin || "")}"></label>
+      <label>Weight up to (kg)<input type="text" inputmode="decimal" name="wmax" value="${esc(f.wmax || "")}"></label>
+      <label>Max length (cm)<input type="text" inputmode="decimal" name="l" value="${esc(f.l || "")}"></label>
+      <label>Max width (cm)<input type="text" inputmode="decimal" name="w" value="${esc(f.w || "")}"></label>
+      <label>Max height (cm)<input type="text" inputmode="decimal" name="h" value="${esc(f.h || "")}"></label>
+      <label>Min hook space W (cm)<input type="text" inputmode="decimal" name="hw" value="${esc(f.hw || "")}"></label>
+    </div>
+    <div class="chips">${[["shooter", "Shooter"], ["intake", "Intake"], ["climb", "Climbs"], ["partnerClimb", "Partner climb"], ["hookSpace", "Hook space"]].map(([k, l]) => `<button type="button" data-k="${k}" class="${f[k] ? "on" : ""}">${l}</button>`).join("")}</div>
+    <input type="search" name="text" placeholder="Words in notes, comments, commentary" value="${esc(f.text || "")}">
+    <p class="small muted" id="cnt"></p><div class="list" id="res"></div>`;
+  const num = (v) => (v === "" || v == null ? null : Number(String(v).replace(",", ".")));
+  const run = () => {
+    const q = Object.fromEntries([...view.querySelectorAll("input")].map((i) => [i.name, i.value.trim()]));
+    view.querySelectorAll(".chips button").forEach((b) => (q[b.dataset.k] = b.classList.contains("on")));
+    ls.set("find", q);
+    const words = q.text.toLowerCase().split(/\s+/).filter(Boolean);
+    const rows = Object.values(STATE.teams).filter((t) => {
+      const F = t.scouted.fields, R = t.research?.robot || {};
+      const has = (k) => (k === "hookSpace" ? F.hookSpace?.has : F[k]?.has ?? R[k]) === true;
+      for (const k of ["shooter", "intake", "climb", "partnerClimb", "hookSpace"]) if (q[k] && !has(k)) return false;
+      const wt = F.weightKg;
+      if (num(q.wmin) != null && !(wt >= num(q.wmin))) return false;
+      if (num(q.wmax) != null && !(wt <= num(q.wmax))) return false;
+      for (const d of ["l", "w", "h"]) if (num(q[d]) != null && !(F.size?.[d] <= num(q[d]))) return false;
+      if (num(q.hw) != null && !(F.hookSpace?.w >= num(q.hw))) return false;
+      if (words.length) {
+        const hay = [t.name, ...t.scouted.comments.map((c) => c.text), ...(t.research?.notes || []), ...(t.observations || []).flatMap((o) => [o.summary, o.facts?.strategy, ...(o.facts?.goodAt || []), ...(o.facts?.badAt || []), ...(o.facts?.problems || []), ...(o.facts?.evidence || [])])].join(" ").toLowerCase();
+        if (!words.every((w) => hay.includes(w))) return false;
+      }
+      return true;
+    }).sort((a, b) => (b.history.pastScore ?? 0) - (a.history.pastScore ?? 0));
+    $("#cnt").textContent = `${rows.length} team(s)`;
+    $("#res").innerHTML = rows.slice(0, 80).map((t) => {
+      const F = t.scouted.fields;
+      const bits = [F.weightKg != null ? `${F.weightKg} kg` : null, F.size ? `${F.size.l ?? "?"}×${F.size.w ?? "?"}×${F.size.h ?? "?"} cm` : null, F.hookSpace?.has != null ? `hooks ${yn(F.hookSpace.has)}` : null, t.observations?.length ? `${t.observations.length} match notes` : null].filter(Boolean);
+      return `<a class="row" href="#/team/${t.code}"><span class="code">${t.code}</span><span class="grow"><div class="title">${esc(t.name)}</div><div class="sub">${esc(bits.join(" · ") || "no measurements yet")}</div></span><span class="score">${t.history.pastScore ?? "–"}</span></a>`;
+    }).join("");
+  };
+  view.querySelectorAll("input").forEach((i) => (i.oninput = run));
+  view.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => { b.classList.toggle("on"); run(); }));
+  run();
 }
 
 function renderTeam(code) {
@@ -258,6 +338,17 @@ function renderTeam(code) {
       <button class="primary" type="submit">Save</button>
       <p class="small muted">Saved on this phone first, then synced. Only fill what you saw; blanks never erase what others entered.</p>
     </form>
+
+    <h2>From the match commentary</h2>
+    <div class="card">${(t.observations || []).length ? t.observations.map((o) => `<div class="obs">
+      <div><b>${esc(o.matchKey || "")}</b> <a class="small" href="${esc(o.source?.url || "#")}" target="_blank" rel="noopener">watch</a></div>
+      <div>${esc(o.summary)}</div>
+      ${o.facts?.goodAt?.length ? `<div class="small">👍 ${esc(o.facts.goodAt.join("; "))}</div>` : ""}
+      ${o.facts?.badAt?.length ? `<div class="small">👎 ${esc(o.facts.badAt.join("; "))}</div>` : ""}
+      ${o.facts?.strategy ? `<div class="small">🧭 ${esc(o.facts.strategy)}</div>` : ""}
+      ${o.facts?.problems?.length ? `<div class="small">⚠️ ${esc(o.facts.problems.join("; "))}</div>` : ""}
+      ${o.facts?.evidence?.length ? `<details><summary>Commentator quotes</summary>${o.facts.evidence.map((q) => `<div class="small">“${esc(q)}”</div>`).join("")}</details>` : ""}
+    </div>`).join("") : `<p class="muted small">Nothing yet. Filled from the livestream commentary once this team plays a match we track.</p>`}</div>
 
     <h2>Past seasons</h2>
     <div class="card">
@@ -329,10 +420,28 @@ async function refresh() {
   const m = /^#\/team\/([A-Z]{3})$/.exec(h);
   if (m) renderTeam(m[1]);
   else if (h === "#/matches") renderMatches();
+  else if (h === "#/find") renderFind();
   else if (h === "#/") renderTeams();
   else renderNext();
   syncBadge();
 }
 addEventListener("hashchange", refresh);
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+// Updates: the server stamps sw.js with a hash of the app, so a deploy means a
+// new service worker. When it takes control, offer a reload. Check on every
+// return to the app too: iOS resumes a home-screen app instead of reopening it.
+if ("serviceWorker" in navigator) {
+  // The first controller change on a fresh install is not an update.
+  let firstInstall = !navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && check());
+    setInterval(check, 5 * 60_000);
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (firstInstall) { firstInstall = false; return; }
+    const b = $("#update");
+    b.hidden = false;
+    b.onclick = () => location.reload();
+  });
+}
 flush().finally(refresh);

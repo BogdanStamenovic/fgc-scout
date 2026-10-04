@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest } from "./logic.mjs";
+import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats } from "./logic.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const DATA = process.env.SCOUT_DATA || path.join(ROOT, "data");
@@ -43,6 +43,22 @@ const history = readJson(path.join(DATA, "history.json"), { teams: {} });
 const research = () => readJson(path.join(DATA, "research.json"), { teams: {} });
 const LIVE = path.join(DATA, `live-${YEAR}.json`);
 let live = readJson(LIVE, { fetchedAt: null, data: null, error: null });
+const STATS = path.join(DATA, `stats-${YEAR}.json`);
+let stats = readJson(STATS, { fetchedAt: null, teams: {} });
+let polls = 0;
+
+// Every 5th poll (~10 min) pull the full dump with per-match details, which is
+// where the official per-robot end-game results live, and recompute stats.
+async function pollDetails() {
+  try {
+    const r = await fetch(`https://api.first.global/v1?year=${YEAR}`, { signal: AbortSignal.timeout(60_000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    stats = { fetchedAt: new Date().toISOString(), teams: teamStats(d.matches || []) };
+    fs.writeFileSync(STATS + ".tmp", JSON.stringify(stats));
+    fs.renameSync(STATS + ".tmp", STATS);
+  } catch { /* keep last good stats */ }
+}
 
 async function poll() {
   try {
@@ -54,6 +70,7 @@ async function poll() {
     const data = await r.json();
     live = { fetchedAt: new Date().toISOString(), data, error: null };
     await archiveDetails(data);
+    if (polls++ % 5 === 0) await pollDetails();
     fs.writeFileSync(LIVE + ".tmp", JSON.stringify(live));
     fs.renameSync(LIVE + ".tmp", LIVE);
   } catch (e) {
@@ -109,6 +126,7 @@ function state() {
       entries: (byCode[code] || []).length,
       photos: photosBy[code] || [],
       observations: obsBy[code] || [],
+      stats: stats.teams[code] || null,
     };
   }
   // Teams we hold data on but that are missing from history.json (a late
@@ -117,7 +135,7 @@ function state() {
     if (teams[code]) continue;
     teams[code] = { code, name: code, page: null, history: { pastScore: null, predictedRank: null, predictedOf: null, seasons: [] },
       research: res[code] || null, scouted: mergeEntries(byCode[code] || []), entries: (byCode[code] || []).length,
-      photos: photosBy[code] || [], observations: obsBy[code] || [] };
+      photos: photosBy[code] || [], observations: obsBy[code] || [], stats: stats.teams[code] || null };
   }
   const liveData = live.data || { matches: [], rankings: [] };
   const schedule = ourMatches(liveData.matches || [], OUR);
@@ -195,7 +213,7 @@ async function handle(req, res) {
 
     if (p === "/api/state" && req.method === "GET") {
       const s = state();
-      return send(res, 200, { ...s, our: OUR, live: { fetchedAt: live.fetchedAt, error: live.error }, backtest: history.backtest || null });
+      return send(res, 200, { ...s, our: OUR, live: { fetchedAt: live.fetchedAt, error: live.error }, statsFetchedAt: stats.fetchedAt, backtest: history.backtest || null });
     }
     if (p === "/api/interest" && req.method === "GET") {
       return send(res, 200, { matches: interestNow(live.data) });

@@ -150,3 +150,20 @@ test("matches of interest: our matches first, then partners' and opponents'", ()
   assert.deepEqual(list.map((m) => m.key), ["t2-1", "t2-2"]);
   assert.equal(list[1].priority, 50);
 });
+
+import { teamStats } from "./logic.mjs";
+
+test("teamStats maps per-robot fields to the team at that station", () => {
+  const P = (c, s) => ({ country: c, station: s });
+  const mk = (id, r1, b2) => ({ tournamentKey: "t2", id, played: true, redScore: 50, blueScore: 30,
+    participants: [P("AAA", 11), P("BBB", 12), P("CCC", 13), P("DDD", 21), P("EEE", 22), P("FFF", 23)],
+    details: { redRobotOneClimb: r1, blueRobotTwoClimb: b2, redRobotTwoClimb: 0, notARobotField: 7 } });
+  const s = teamStats([mk(1, 0.3, 0.05), mk(2, 0.1, 0)]);
+  assert.equal(s.AAA.played, 2);
+  assert.equal(s.AAA.avgAllianceScore, 50);
+  assert.deepEqual(s.AAA.robot.Climb.levels, { "zone 3": 1, "zone 1": 1 });
+  assert.equal(s.AAA.robot.Climb.offGroundRate, 100);
+  assert.equal(s.EEE.robot.Climb.offGroundRate, 0);
+  assert.equal(s.EEE.robot.Climb.nonzeroRate, 50);
+  assert.equal(s.BBB.robot.Climb.mean, 0);
+});

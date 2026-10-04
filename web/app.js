@@ -250,6 +250,7 @@ function renderFind() {
       <label>Max width (cm)<input type="text" inputmode="decimal" name="w" value="${esc(f.w || "")}"></label>
       <label>Max height (cm)<input type="text" inputmode="decimal" name="h" value="${esc(f.h || "")}"></label>
       <label>Min hook space W (cm)<input type="text" inputmode="decimal" name="hw" value="${esc(f.hw || "")}"></label>
+      <label>Climbs off ground ≥ % (official)<input type="text" inputmode="decimal" name="og" value="${esc(f.og || "")}"></label>
     </div>
     <div class="chips">${[["shooter", "Shooter"], ["intake", "Intake"], ["climb", "Climbs"], ["partnerClimb", "Partner climb"], ["hookSpace", "Hook space"]].map(([k, l]) => `<button type="button" data-k="${k}" class="${f[k] ? "on" : ""}">${l}</button>`).join("")}</div>
     <input type="search" name="text" placeholder="Words in notes, comments, commentary" value="${esc(f.text || "")}">
@@ -269,6 +270,10 @@ function renderFind() {
       if (num(q.wmax) != null && !(wt <= num(q.wmax))) return false;
       for (const d of ["l", "w", "h"]) if (num(q[d]) != null && !(F.size?.[d] <= num(q[d]))) return false;
       if (num(q.hw) != null && !(F.hookSpace?.w >= num(q.hw))) return false;
+      if (num(q.og) != null) {
+        const og = Object.values(t.stats?.robot || {}).map((r) => r.offGroundRate).find((x) => x != null);
+        if (!(og >= num(q.og))) return false;
+      }
       if (words.length) {
         const hay = [t.name, ...t.scouted.comments.map((c) => c.text), ...(t.research?.notes || []), ...(t.observations || []).flatMap((o) => [o.summary, o.facts?.strategy, ...(o.facts?.goodAt || []), ...(o.facts?.badAt || []), ...(o.facts?.problems || []), ...(o.facts?.evidence || [])])].join(" ").toLowerCase();
         if (!words.every((w) => hay.includes(w))) return false;
@@ -338,6 +343,15 @@ function renderTeam(code) {
       <button class="primary" type="submit">Save</button>
       <p class="small muted">Saved on this phone first, then synced. Only fill what you saw; blanks never erase what others entered.</p>
     </form>
+
+    <h2>Official match stats</h2>
+    <div class="card">${t.stats ? `
+      <p class="small">${t.stats.played} ranking matches · average alliance score ${t.stats.avgAllianceScore ?? "–"}</p>
+      ${Object.entries(t.stats.robot).map(([f, r]) => `<div class="small"><b>${esc(f)}</b> per robot: ${r.levels
+        ? `${Object.entries(r.levels).map(([l, n]) => `${esc(l)} ×${n}`).join(", ")} · <b>off the ground ${r.offGroundRate}%</b>`
+        : `values ${Object.entries(r.distribution).map(([v, n]) => `${esc(v)}×${n}`).join(", ")} · mean ${r.mean} · non-zero ${r.nonzeroRate}%`}</div>`).join("")}
+      <p class="small muted">From FIRST Global's official per-robot results (robot one/two/three = their station). Updated ${ago(STATE.statsFetchedAt)}.</p>`
+      : `<p class="muted small">No 2026 matches played yet.</p>`}</div>
 
     <h2>From the match commentary</h2>
     <div class="card">${(t.observations || []).length ? t.observations.map((o) => `<div class="obs">

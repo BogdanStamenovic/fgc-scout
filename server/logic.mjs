@@ -238,3 +238,52 @@ export function matchesOfInterest({ matches, schedule, alliance, finalsAlliances
   }
   return out.sort((a, b) => b.priority - a.priority || String(b.scheduledTime).localeCompare(String(a.scheduledTime)));
 }
+
+// ---------- official per-team stats from per-match details ----------
+// The official details carry per-robot fields named like redRobotOneParking
+// (2025) — robot One/Two/Three = station x1/x2/x3 (inferred; fgc-vision checks
+// it on video). Field names change every season, so match them generically.
+const ROBOT_FIELD = /^(red|blue)Robot(One|Two|Three)(.+)$/;
+const IDX = { One: 1, Two: 2, Three: 3 };
+// 2026 climb increments (manual table 3-4), if the season's per-robot field uses them.
+const CLIMB_2026 = { 0: "none", 0.05: "contact", 0.1: "zone 1", 0.2: "zone 2", 0.3: "zone 3" };
+
+export function teamStats(matches) {
+  const T = {};
+  for (const m of matches) {
+    if (!m.played || !m.details || m.tournamentKey !== "t2") continue;
+    const byStation = Object.fromEntries((m.participants || []).map((p) => [p.station, p.country]));
+    for (const p of m.participants || []) {
+      if (p.station % 10 > 3) continue;
+      const t = (T[p.country] ??= { played: 0, allianceScores: [], robot: {} });
+      t.played++;
+      t.allianceScores.push(Math.floor(p.station / 10) === 1 ? m.redScore : m.blueScore);
+    }
+    for (const [k, v] of Object.entries(m.details)) {
+      const r = ROBOT_FIELD.exec(k);
+      if (!r || typeof v !== "number") continue;
+      const code = byStation[(r[1] === "red" ? 10 : 20) + IDX[r[2]]];
+      if (!code) continue;
+      ((T[code] ??= { played: 0, allianceScores: [], robot: {} }).robot[r[3]] ??= []).push(v);
+    }
+  }
+  const out = {};
+  for (const [code, t] of Object.entries(T)) {
+    const robot = {};
+    for (const [field, vals] of Object.entries(t.robot)) {
+      const dist = {};
+      for (const v of vals) dist[v] = (dist[v] || 0) + 1;
+      const allClimb = vals.every((v) => v in CLIMB_2026);
+      robot[field] = {
+        n: vals.length,
+        mean: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000,
+        nonzeroRate: Math.round((vals.filter((v) => v > 0).length / vals.length) * 100),
+        distribution: dist,
+        ...(allClimb ? { levels: Object.fromEntries(Object.entries(dist).map(([v, n]) => [CLIMB_2026[v], n])), offGroundRate: Math.round((vals.filter((v) => v >= 0.1).length / vals.length) * 100) } : {}),
+      };
+    }
+    const s = t.allianceScores;
+    out[code] = { played: t.played, avgAllianceScore: s.length ? Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 10) / 10 : null, robot };
+  }
+  return out;
+}

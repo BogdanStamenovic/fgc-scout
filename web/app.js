@@ -242,7 +242,8 @@ function renderNext() {
           ${relationLine(p)}</span>
         ${dangerBand(Math.max(1, Math.ceil((5 * p.priority) / max)))}
       </a></li>`).join("") || `<li class="none">Every team is measured. Nice work.</li>`}</ol>
-    ${SCORE_HELP}`;
+    ${SCORE_HELP}
+    <p class="note"><a href="/guide/">Songdo trip guide</a> for the team: entry rules, the 3am arrival, free evenings, food. Anyone can open that link, no key needed.</p>`;
 }
 
 function progressDots(t) {

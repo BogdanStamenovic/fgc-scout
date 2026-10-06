@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Songdo Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --ink:#15202e; --mute:#5a6678; --rule:#dde2ea;
+  --line1:#0052a4; --inc1:#5a8fc8; --arex:#0090d2; --green:#2f8f5b;
+  --warn:#b8620a; --warnbg:#fff3e2; --warnrule:#f1c98f;
+  --chk:#7a5a00; --chkbg:#fbf0c9;
+  --link:#0a5bb5;
+  --display:"Gothic A1","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Apple SD Gothic Neo","Noto Sans KR",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0e1622; --card:#152131; --ink:#e7edf5; --mute:#9aa8bb; --rule:#26364b;
+    --line1:#5b9cf0; --inc1:#8fb9e6; --arex:#4cc0f0; --green:#5cc48b;
+    --warn:#ffb560; --warnbg:#2c2112; --warnrule:#6b4a1f;
+    --chk:#f2d26b; --chkbg:#2e2a14; --link:#8cc3ff;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0e1622; --card:#152131; --ink:#e7edf5; --mute:#9aa8bb; --rule:#26364b;
+  --line1:#5b9cf0; --inc1:#8fb9e6; --arex:#4cc0f0; --green:#5cc48b;
+  --warn:#ffb560; --warnbg:#2c2112; --warnrule:#6b4a1f;
+  --chk:#f2d26b; --chkbg:#2e2a14; --link:#8cc3ff;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 15.5px/1.55 var(--body);padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:760px;margin:0 auto}
+a{color:var(--link);text-underline-offset:2px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--arex);outline-offset:2px;border-radius:4px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.92em}
+header.top{padding-block:28px 14px}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+h1{font:800 clamp(28px,7vw,40px)/1.1 var(--display);margin:.35em 0 .3em;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0;max-width:62ch}
+.rate{margin-top:12px;display:inline-flex;gap:10px;flex-wrap:wrap;font:500 13px/1.4 var(--mono);color:var(--mute)}
+.rate b{color:var(--ink);font-weight:500}
+nav.jump{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--rule);margin-bottom:8px}
+nav.jump ul{list-style:none;margin:0;padding:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+nav.jump ul::-webkit-scrollbar{display:none}
+nav.jump a{display:block;white-space:nowrap;text-decoration:none;color:var(--ink);font:600 13px/1 var(--body);padding:8px 12px;border-radius:999px;border:1px solid var(--rule);background:var(--card)}
+.alert{background:var(--warnbg);border:1px solid var(--warnrule);border-left:5px solid var(--warn);border-radius:10px;padding:14px 16px;margin:16px 0 8px}
+.alert h2{font:800 17px/1.3 var(--display);color:var(--warn);margin:0 0 6px}
+.alert ul{margin:0;padding-left:18px}
+section{padding-top:26px;scroll-margin-top:64px}
+section>h2{font:800 22px/1.2 var(--display);margin:0 0 12px;display:flex;align-items:center;gap:10px;text-wrap:balance}
+section>h2::before{content:"";width:6px;height:22px;border-radius:3px;background:var(--stripe,var(--line1));flex:none}
+h3{font:700 16px/1.3 var(--display);margin:18px 0 6px}
+p{margin:.4em 0}
+ul.tight{margin:.3em 0;padding-left:18px}
+ul.tight li{margin:.25em 0}
+.chk{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--chk);background:var(--chkbg);padding:3px 6px;border-radius:4px;vertical-align:1px;margin-left:4px;white-space:nowrap}
+.est{font-style:italic;color:var(--mute)}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:10px 0}
+.verdict{display:flex;gap:12px;align-items:flex-start}
+.verdict .tag{flex:none;font:700 12px/1 var(--mono);padding:6px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.05em}
+.tag.no{background:var(--warnbg);color:var(--warn);border:1px solid var(--warnrule)}
+.tag.meh{background:var(--chkbg);color:var(--chk)}
+.scroll{overflow-x:auto;margin:10px 0;border:1px solid var(--rule);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 12px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+.slots{display:grid;gap:10px;margin-top:6px}
+.slot{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;border-left:5px solid var(--sc,var(--inc1))}
+.slot .when{font:600 12.5px/1.2 var(--mono);color:var(--mute);letter-spacing:.04em}
+.slot h3{margin:4px 0 6px}
+.kr{font-family:var(--display);font-weight:700}
+details{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;margin:8px 0}
+summary{cursor:pointer;font-weight:600}
+footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--rule);color:var(--mute);font-size:13px}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">Team Serbia · FIRST Global 2026 · Songdo, Incheon</div>
+  <h1>Songdo Field Guide</h1>
+  <p class="sub">Getting in at 3am, where the free evenings go, what's worth buying, and what to eat. Researched 5 Oct 2026. Anything marked <span class="chk">check</span> had conflicting or stale sources.</p>
+  <div class="rate"><span><b>€1 = ₩1,513</b> (ECB, 2 Oct)</span><span>·</span><span><b>₩10,000 ≈ €6.60</b></span></div>
+</header>
+
+<nav class="jump" aria-label="Sections">
+  <ul>
+    <li><a href="#entry">Entry rules</a></li>
+    <li><a href="#arrival">3am arrival</a></li>
+    <li><a href="#plan">Free-time plan</a></li>
+    <li><a href="#tech">Tech shopping</a></li>
+    <li><a href="#food">Food</a></li>
+    <li><a href="#move">Getting around</a></li>
+    <li><a href="#practical">Practical</a></li>
+  </ul>
+</nav>
+
+<div class="alert" id="entry">
+  <h2>Entry rules: confirm for every teammate</h2>
+  <ul>
+    <li><b>Serbia is not on Korea's K-ETA exemption list</b> (the 2026 exemption covers 22 countries, Serbia not among them). Serbians are visa-free for 90 days, but anyone <b>aged 18–64 needs an approved K-ETA</b>: <a href="https://www.k-eta.go.kr">k-eta.go.kr</a>, ₩10,000. Usually approved in minutes, can take up to 72 h. Airlines check it at check-in, so if you boarded, yours is likely fine.</li>
+    <li><b>17 or younger:</b> exempt from K-ETA, but must submit the free <b>e-Arrival Card</b> online (the 3 days before arrival; paper cards ended Dec 2025). Doable from a phone, even at the gate or on landing.</li>
+  </ul>
+  <p style="margin-top:8px;font-size:13px">Sources: <a href="https://loyaltylobby.com/2026/01/02/south-korea-extends-k-eta-waiver-through-december-2026-for-select-nationals-of-22-countries/">LoyaltyLobby (22-country list)</a>, <a href="https://www.mofa.go.kr/il-en/brd/m_11417/view.do?seq=759889">MOFA</a>, <a href="https://www.epickor.com/blog/223">epickor</a>.</p>
+</div>
+
+<section id="arrival" style="--stripe:var(--arex)">
+  <h2>The 3am arrival</h2>
+  <ul class="tight">
+    <li><b>First ask the mentors / FIRST Global whether a pickup is arranged.</b> Nothing about transfers is on their public page.</li>
+    <li><b>No train, no night bus to Songdo.</b> AREX starts about 05:14, the 6777 limousine about 05:00, and the airport's night buses serve only Seoul and Gyeonggi.</li>
+    <li><b>Take a taxi from the Incheon taxi stand:</b> T1 pickup <span class="mono">5D</span>, T2 <span class="mono">3D</span>. Uber and Kakao T also work.</li>
+    <li>Fare: daytime about ₩25–30k, ~30 min, plus the Incheon Bridge toll (₩2,000). Night surcharge is +20% from 02:00–04:00. <span class="est">Estimate: ₩32–40k per car (€21–26), split 4 ways.</span> A big group with luggage may need a jumbo or call van.</li>
+    <li>Registration opens at 08:30. Sleep. Lunch and dinner are provided to official team members in the Grand Ballroom, so your own spending is mostly snacks and free evenings.</li>
+  </ul>
+</section>
+
+<section id="plan" style="--stripe:var(--inc1)">
+  <h2>Plan by free slot</h2>
+  <p class="sub">The robot stays in the pit every night. Your real free time is evenings, plus Saturday night and maybe Sunday.</p>
+  <div class="slots">
+    <article class="slot" style="--sc:var(--inc1)">
+      <div class="when">TUE 6 OCT · after 16:45</div>
+      <h3>Songdo Central Park</h3>
+      <p>Free, open 24 h. Water taxi ₩4,000 (West boathouse to 19:00 on weekdays, East to 21:00). Walk to the Tri-Bowl and the Hanok Village, then BBQ near Central Park station. Optional: the <b>G-Tower</b> 33F observatory, free with ID <span class="chk">check hours</span>.</p>
+    </article>
+    <article class="slot" style="--sc:var(--mute)">
+      <div class="when">WED 7 OCT · evening</div>
+      <h3>Opening ceremony</h3>
+      <p>Afterwards: chimaek, or a convenience-store run near the hotel.</p>
+    </article>
+    <article class="slot" style="--sc:var(--inc1)">
+      <div class="when">THU 8 OCT · after 17:30</div>
+      <h3>Triple Street + Hyundai Premium Outlet</h3>
+      <p>Technopark station, exit 2. An Apple reseller on B1 (earphones), the NC Cube Canal Walk, a cinema, and the B1 food court.</p>
+    </article>
+    <article class="slot" style="--sc:var(--line1)">
+      <div class="when">FRI 9 OCT · Hangul Day · after 17:00</div>
+      <h3>Incheon Chinatown → Fairy Tale Village → Wolmido</h3>
+      <p>About 57 min by subway (long transfer walk at Woninjae); a taxi split 4 ways is faster. Jjajangmyeon for dinner where it was invented, then the murals. <b>Wolmi Sea Train</b> ₩8,000 (₩6,000 for ages 13–18), runs to 21:00 Fri–Sun. Rides at Wolmido ₩3–6k each.</p>
+      <p class="est">Alternative: Gangbyeon Techno Mart (open to 21:00 on holidays), but it's ~2 h each way. Too tight.</p>
+    </article>
+    <article class="slot" style="--sc:var(--green)">
+      <div class="when">SAT 10 OCT · after 18:00</div>
+      <h3>Celebrate in Songdo, or go to Hongdae</h3>
+      <p>Hongdae busking peaks 20:00–22:00 on Saturdays. PC bang ₩1,000–1,800/h, coin karaoke ~₩7,000/h. <b>Under 19: no PC bang or noraebang from 22:00 to 09:00, and staff check passports.</b> Last <span class="mono">M6724</span> bus from Sinchon back to Songdo leaves <b>00:15</b>.</p>
+    </article>
+    <article class="slot" style="--sc:var(--arex)">
+      <div class="when">SUN 11 OCT · if you're still here</div>
+      <h3>A full Seoul day</h3>
+      <ul class="tight">
+        <li><b>Morning:</b> Gyeongbokgung (09:00–18:00, ₩3,000), then Bukchon. Its red zone is open to tourists 10:00–17:00 only; outside those hours the fine is ₩100,000.</li>
+        <li><b>Afternoon, tech:</b> Gangbyeon Techno Mart (Sun 10:30–21:00) or Yongsan Etland (10:30–20:00). Seonin Plaza is probably shut on Sundays.</li>
+        <li><b>Evening:</b> Myeongdong street food, then N Seoul Tower (to 23:00, ₩29,000). Or COEX Starfield Library (free, to 22:00), or Lotte World Tower Seoul Sky (~₩27k+, foreigner discounts).</li>
+      </ul>
+    </article>
+  </div>
+  <details>
+    <summary>Tech sights that don't fit</summary>
+    <p><b>Samsung Innovation Museum</b> (Suwon) is free, but weekdays are by reservation 13:00–14:00 only, Saturday is walk-in, and it's closed Sundays and holidays, including Fri 9 Oct. <b>Samsung d'light is permanently closed</b>; the Samsung Gangnam flagship at Gangnam Station replaced it <span class="chk">check hours</span>.</p>
+  </details>
+</section>
+
+<section id="tech" style="--stripe:var(--warn)">
+  <h2>Tech shopping</h2>
+  <div class="panel verdict">
+    <span class="tag no">Read first</span>
+    <div><b>Korea isn't cheap for electronics right now, and Serbian customs flips the maths.</b> DRAM prices doubled between March and September. Samsung raised Galaxy S26 prices in Korea on 1 Oct (+₩149,600). And the Serbian duty-free allowance is only <b>€100 per person</b> (no higher air limit; €430 is the EU's). Above that, expect roughly <b>10% duty + 20% VAT ≈ +32%</b> on the whole value <span class="chk">secondary sources</span>.</div>
+  </div>
+
+  <h3>Price check vs Serbia</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Item</th><th>Korea</th><th>Serbia</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Ryzen 7 9800X3D</td><td class="num">₩720,000 ≈ €476 (Danawa)</td><td class="num">59,999 RSD ≈ €511 (Gigatron)</td><td>Saves €35–90; declared, VAT eats it. Domestic-only warranty. <b>Skip.</b></td></tr>
+      <tr><td>Galaxy S26 256 GB</td><td class="num">₩1,403,600 ≈ €927</td><td class="num">from ~€853 (A1) to €1,022</td><td>Not cheaper, and a Korean model. <b>Skip.</b></td></tr>
+      <tr><td>AirPods Pro 3</td><td class="num">₩369,000 ≈ €244</td><td class="num">31,990 RSD ≈ €272 (iSTYLE)</td><td>€30–45 cheaper with tax refund. <b>Marginal.</b></td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Bottom line:</b> buy things that are Korea-only or cheap. Flagship phones, CPUs and boards aren't worth it once declared.</p>
+
+  <h3>Where, if you still want to look</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Place</th><th>Hours</th><th>Closed</th><th>For</th></tr></thead>
+    <tbody>
+      <tr><td><b>Seonin Plaza</b>, Yongsan</td><td class="num">~10:00–19:00</td><td>Sundays + holidays <span class="chk">check</span></td><td>PC parts, builds</td></tr>
+      <tr><td><b>Electroland / Etland</b>, Yongsan (by I'Park Mall)</td><td class="num">10:30–20:00</td><td>Open daily</td><td>Retail chain, fixed prices</td></tr>
+      <tr><td><b>Gangbyeon Techno Mart</b> (Line 2)</td><td class="num">10:30–20:30, wknd to 21:00</td><td>2nd + 4th Tuesday</td><td>6F phones, 7–8F PC parts</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="tight">
+    <li><b>Yongsan is mostly gone.</b> Seven Najin buildings were demolished between 2024 and 2026, and three more close from this month. Seonin, Wonhyo and Etland still trade, with very little foot traffic.</li>
+    <li><b>Fri 9 Oct is a public holiday</b>, so Seonin/Najin are likely shut.</li>
+    <li>Ask for the <b>cash price</b>: vendors may add ~10% for cards. Compare 3–5 shops and haggle.</li>
+  </ul>
+
+  <h3>Korean-model phones ("N" Galaxy)</h3>
+  <ul class="tight">
+    <li><b>eSIM is unclear</b> for Korean S25/S26 variants. In the store, check <span class="mono">Settings → Connections → SIM manager → Add eSIM</span> before paying.</li>
+    <li>Bands: the S25 Korean model reportedly has LTE B20 + B28, which matter in Serbia. Check the exact model number.</li>
+    <li>Forced camera shutter sound <span class="chk">unverified</span>. Warranty is effectively regional.</li>
+  </ul>
+
+  <h3>Earphones</h3>
+  <p>Apple: Apple Stores in Seoul, or the reseller on B1 of Hyundai Premium Outlet Songdo (Technopark exit 2). Other brands: Samsung stores, Lotte Hi-Mart, Electroland.</p>
+
+  <h3>Tourist tax refund</h3>
+  <ul class="tight">
+    <li>Minimum ₩15,000 per receipt. <b>Refunded instantly at the till</b> if the receipt is under ₩1,000,000 (₩5M cap per trip); above that, claim at the airport.</li>
+    <li>You get back ~5–8%, not the full 10%. <b>Bring your passport.</b> Small PC shops often aren't tax-free registered.</li>
+    <li>Keep refunded goods in your carry-on until airport customs has seen them.</li>
+  </ul>
+</section>
+
+<section id="food" style="--stripe:var(--green)">
+  <h2>Food</h2>
+  <p><b>How ordering works:</b> a kiosk by the door (English mode is common), a table tablet, or the <b>call bell</b> on the table. Don't wave. No tipping.</p>
+  <h3>Eat at least once</h3>
+  <p>Samgyeopsal or galbi BBQ (usually a 2-portion minimum) · chimaek (fried chicken + beer) · tteokbokki · kimbap · bibimbap · jjajangmyeon · a convenience-store run: triangle kimbap, ramyeon with the in-store hot water, banana milk.</p>
+
+  <h3>Near the venue, weeknights</h3>
+  <ul class="tight">
+    <li><b>BBQ by Central Park station:</b> <span class="kr">깡돈</span> (500 g pork set ₩39,000), <span class="kr">운로</span>, <span class="kr">당산오돌</span>, <span class="kr">단지집</span>. From Korean rating sites, not visited.</li>
+    <li><b>Chicken:</b> <span class="kr">노랑통닭</span>, <span class="kr">기영이 숯불두마리치킨</span> (Central Park), <span class="kr">동근이 숯불두마리치킨</span> near Convensia. A whole chicken is ~₩20–25k.</li>
+    <li><b>Songdo Hanok Village</b> (in Central Park): galbi and bulgogi in hanok buildings, e.g. <span class="kr">영삼이네 우정 소갈비</span>.</li>
+    <li><b>Triple Street / outlet B1:</b> food court, Shake Shack, PF Chang's.</li>
+  </ul>
+  <p class="est">Tip: show the Korean name to the driver, or paste it into Naver Map.</p>
+
+  <h3>Worth the trip</h3>
+  <ul class="tight">
+    <li><b>Incheon Chinatown:</b> jjajangmyeon ₩7–9k, tangsuyuk ₩15–20k (Sinseung Banjeom, Gonghwachun). The Jjajangmyeon Museum is ₩1,000.</li>
+    <li><b>Gwangjang Market</b> (Seoul): bindaetteok ₩5,000, mayak kimbap ₩4–8k. Food stalls 09:00–23:00.</li>
+    <li><b>Myeongdong</b> street food ~16:00–23:00, ₩4–8k per item. Touristy, about 2× normal prices.</li>
+  </ul>
+  <p><b>Budget:</b> convenience-store meal ₩5–8k · casual meal ₩9–15k · BBQ ₩20–30k per person.</p>
+  <p class="est">Drinking age is 19 by birth year: born in 2007 or earlier is fine in 2026.</p>
+</section>
+
+<section id="move" style="--stripe:var(--line1)">
+  <h2>Getting around</h2>
+  <ul class="tight">
+    <li><b>Maps:</b> use <b>Naver Map</b> or <b>Kakao Map</b>; Google Maps is weak here. <b>Taxis:</b> Kakao T (takes foreign Visa/MC; if 3-D Secure blocks the card, choose "pay to driver"), k.ride, or Uber.</li>
+    <li><b>T-money card</b> (~₩4,000) at any convenience store; top up with cash. Incheon Line 1 base fare ₩1,550.</li>
+    <li>Venue station: <b>Incheon National University</b> (Incheon Line 1). Central Park station is ~15 min on foot.</li>
+  </ul>
+  <div class="scroll"><table>
+    <thead><tr><th>Songdo →</th><th>Best route</th><th>Time</th></tr></thead>
+    <tbody>
+      <tr><td>Hongdae / Sinchon</td><td>Red bus <span class="mono">M6724</span>, or Incheon L1 → Gyeyang → AREX</td><td class="num">1h15–1h30</td></tr>
+      <tr><td>Yongsan</td><td>Incheon L1 → Bupyeong → Line 1 express</td><td class="num">1h20–1h30</td></tr>
+      <tr><td>Myeongdong</td><td>As Yongsan, then Line 4 via Seoul Station</td><td class="num">1h30–1h45</td></tr>
+      <tr><td>Gangnam / COEX</td><td>Red bus <span class="mono">M6405</span></td><td class="num">1h–1h30</td></tr>
+    </tbody>
+  </table></div>
+  <div class="panel verdict">
+    <span class="tag meh">Last ride</span>
+    <div><b>Leave central Seoul by 23:00.</b> The last M6724 from Sinchon is 00:15. The last Line 1 toward Incheon from Seoul Station is ~23:30, and the last Incheon L1 from Bupyeong to Songdo ~00:50 <span class="chk">check on Naver Map</span>. A late taxi back is ~₩60–90k.</div>
+  </div>
+</section>
+
+<section id="practical" style="--stripe:var(--mute)">
+  <h2>Practical</h2>
+  <ul class="tight">
+    <li><b>Weather:</b> clear and dry. ~22–25 °C by day, 11–13 °C at night. Bring a light jacket for the waterfront.</li>
+    <li><b>Plugs:</b> Type C/F, 220 V. Serbian plugs fit with no adapter.</li>
+    <li><b>Money:</b> cards (Revolut/Wise too) work almost everywhere. Carry some cash for markets and Yongsan. Woori/KB "Global ATM" charge ~₩2–3k. <b>Always pay in KRW</b> and refuse the ATM's own conversion.</li>
+    <li><b>LG U+ eSIM:</b> data-only plans can't receive SMS, and some Korean apps need SMS to sign up. Some "unlimited" plans slow to ~5 Mbps after 3 GB/day. Hotspot is usually allowed, so share it with teammates. Turn off roaming on the Serbian SIM.</li>
+    <li><b>Fri 9 Oct is Hangul Day:</b> banks and offices close; shops and transit run.</li>
+    <li><b>Emergency:</b> <span class="mono">112</span> police · <span class="mono">119</span> ambulance · <span class="mono">1330</span> tourist helpline. FIRST Global has a medic station at the venue.</li>
+  </ul>
+  <details>
+    <summary>Couldn't verify</summary>
+    <ul class="tight">
+      <li>"dusan saw": ask Dušan what he meant.</li>
+      <li>The exact 3am taxi fare (₩32–40k is an estimate).</li>
+      <li>Last-train times (from a 2023 timetable) and the M6405 last-bus direction.</li>
+      <li>Whether Seonin closes every Sunday or only the 1st and 3rd; G-Tower hours.</li>
+      <li>Korean S26 eSIM support. The Serbian 10% + 20% flat rate above €100 (secondary sources only).</li>
+      <li>Whether FIRST Global runs airport transfers or hotel shuttles.</li>
+    </ul>
+  </details>
+</section>
+
+<footer>Compiled for Team Serbia by hotline-80, 5 Oct 2026, from official and secondary sources (FIRST Global event page, airport.kr, MOFA, Danawa, Gigatron, Serbian customs rules). Prices and hours change: when it matters, check Naver Map or the venue on the day.</footer>
+</div>

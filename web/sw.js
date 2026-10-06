@@ -5,7 +5,7 @@
 const VERSION = "__VERSION__";
 const SHELL = `shell-${VERSION}`;
 const FONTS = ["Barlow-400", "Barlow-500", "Barlow-600", "BarlowSemiCondensed-600", "BarlowSemiCondensed-700"].flatMap((f) => [`/fonts/${f}-latin.woff2`, `/fonts/${f}-latin-ext.woff2`]);
-const FILES = ["/", "/index.html", "/app.js", "/app.css", "/fonts/fonts.css", ...FONTS, "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png"];
+const FILES = ["/", "/index.html", "/app.js", "/app.css", "/fonts/fonts.css", ...FONTS, "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-512.png", "/guide/"];
 self.addEventListener("install", (e) => e.waitUntil(
   caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting())
 ));
@@ -20,5 +20,9 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (u.pathname.startsWith("/api/") || u.pathname === "/sw.js") return;
-  e.respondWith(caches.open(SHELL).then(async (c) => (await c.match(e.request, { ignoreSearch: true })) || (await c.match("/index.html")) || fetch(e.request)));
+  // Only the app's own root falls back to the shell; other pages (the trip
+  // guide) must never be swapped for the app.
+  e.respondWith(caches.open(SHELL).then(async (c) => (await c.match(e.request, { ignoreSearch: true }))
+    || (u.pathname === "/" || u.pathname === "/index.html" ? await c.match("/index.html") : null)
+    || fetch(e.request).catch(() => c.match("/index.html"))));
 });

@@ -344,6 +344,12 @@ async function handle(req, res) {
     return res.end(fs.readFileSync(path.join(WEB, "sw.js"), "utf8").replace("__VERSION__", SHELL_VERSION));
   }
   let f = path.normalize(path.join(WEB, p === "/" ? "index.html" : p));
+  // A folder with its own index.html is its own page (e.g. /guide/); anything
+  // else unknown gets the app shell, whose router handles #/ routes.
+  if (f.startsWith(WEB) && fs.existsSync(f) && fs.statSync(f).isDirectory()) {
+    if (!p.endsWith("/")) { res.writeHead(301, { Location: `${p}/` }); return res.end(); }
+    f = path.join(f, "index.html");
+  }
   if (!f.startsWith(WEB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(WEB, "index.html");
   res.writeHead(200, {
     "Content-Type": MIME[path.extname(f)] || "application/octet-stream",

@@ -43,6 +43,10 @@ ALIASES = {"cookisland": "COK", "hongkong": "HKG", "laos": "LAO", "micronesia": 
            "moldova": "MDA", "syria": "SYR", "tanzania": "TAN"}
 
 
+# The same country under two codes across seasons (Iran: IRN in 2023, IRI otherwise).
+CODE_ALIAS = {"IRN": "IRI"}
+
+
 def load_codes() -> dict[str, str]:
     codes = dict(ALIASES)
     for line in (ROOT / "country-codes.tsv").read_text().splitlines():
@@ -59,7 +63,7 @@ def season(year: int) -> dict[str, dict]:
         if not r.get("team"):
             SKIPPED[year] = SKIPPED.get(year, 0) + 1
             continue
-        code = r["team"]["country"]
+        code = CODE_ALIAS.get(r["team"]["country"], r["team"]["country"])
         if not code.isalpha():  # continental / combined teams ("14" = Team Europe)
             continue
         out[code] = {
@@ -77,7 +81,7 @@ def season(year: int) -> dict[str, dict]:
         }
     for key, flag in (("round_robin", "playoffs"), ("finals", "finals")):
         for r in d.get(key, []):
-            c = (r.get("team") or {}).get("country")
+            c = CODE_ALIAS.get((r.get("team") or {}).get("country"), (r.get("team") or {}).get("country"))
             if c in out:
                 out[c][flag] = True
     by_cc2 = {v["cc2"]: k for k, v in out.items() if v["cc2"]}
@@ -121,6 +125,7 @@ def main() -> int:
     seasons = {y: season(y) for y in YEARS}
     teams = {}
     unmatched = []
+    names = {v: k for k, v in load_codes().items()}
     for slug in (ROOT / "nations-2026.txt").read_text().split():
         name = re.sub(r"-?2026$", "", slug).replace("-", " ")
         code = codes.get(norm(name))
@@ -137,6 +142,15 @@ def main() -> int:
             "pastScore": round(est * 100, 1),
             "seasonsPlayed": n,
         }
+    # Teams in the official 2026 schedule that the nations page doesn't list.
+    sched = ROOT / "schedule-2026-codes.json"
+    for code in (json.loads(sched.read_text()) if sched.exists() else []):
+        if code in teams:
+            continue
+        rows = [seasons[y][code] for y in YEARS if code in seasons[y]]
+        est, n = estimate(rows)
+        teams[code] = {"code": code, "name": (rows[-1]["name"] if rows else names.get(code, code)).replace("`", "’"),
+                       "page": None, "seasons": rows, "pastScore": round(est * 100, 1), "seasonsPlayed": n, "notListed": True}
     ordered = sorted(teams.values(), key=lambda t: -t["pastScore"])
     for i, t in enumerate(ordered, 1):
         t["predictedRank"] = i

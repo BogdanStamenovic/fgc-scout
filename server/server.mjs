@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats, opr, predictMatch, predictStandings } from "./logic.mjs";
+import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats, opr, predictMatch, predictStandings, preEventProjection } from "./logic.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const DATA = process.env.SCOUT_DATA || path.join(ROOT, "data");
@@ -181,6 +181,7 @@ function state() {
     standing: standing(liveData.rankings || [], liveData.matches || [], OUR),
     alliance: projectedAlliance(liveData.rankings || [], OUR, liveData.alliances_round_robin || []),
     openTags,
+    preEvent: preEventProjection(liveData.matches || [], history.teams, OUR),
     prediction: model?.n ? { matchesUsed: model.matches, sigma: Math.round(model.sigma), trend: model.trend,
       ours: (stats.standings || []).find((x) => x.code === OUR) || null, line24: (stats.standings || [])[23]?.predicted ?? null, line8: (stats.standings || [])[7]?.predicted ?? null,
       top: (stats.standings || []).slice(0, 30) } : null,

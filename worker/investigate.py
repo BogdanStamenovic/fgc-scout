@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 PROMPT = """You are researching one team for team Serbia's scouting at the FIRST Global Challenge 2026 (Incheon, 7-10 Oct 2026).
 Game: robots collect 100 mm orange balls (WILDFIRE) and score them into a 201 cm SUPPRESSION UNIT, push balls into the FIRE SHIELD port for the human player, and at the end climb a sloped 6.4 m steel pipe (BRACE) in zones 1-3; partner climbs are 25 points each. No autonomous period. Robot rules: 50 cm start cube, at most 50 cm horizontal extension in one direction, no weight limit, REV kit only.
@@ -94,6 +95,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true", help="list the queue, change nothing")
     ap.add_argument("--timeout", type=int, default=1500, help="seconds per investigation (default 1500)")
+    ap.add_argument("--parallel", type=int, default=3, help="investigations at once (default 3)")
     a = ap.parse_args(argv)
     base, key = os.environ.get("SCOUT_URL", "").rstrip("/"), os.environ.get("SCOUT_KEY", "")
     if not base or not key:
@@ -109,18 +111,24 @@ def main(argv=None) -> int:
         if not queued:
             return 0
         teams = call(base, key, "/api/state")["teams"]
-        failures = 0
-        for inv in queued:
+
+        def one(inv):
             call(base, key, f"/api/investigation/{inv['id']}", {"status": "running"})
             try:
                 rep = run_one(base, key, inv, teams.get(inv["code"], {"code": inv["code"]}), a.timeout)
                 call(base, key, f"/api/investigation/{inv['id']}", {"status": "done", "report": rep})
-                print(f"{inv['code']}: done, {len(rep['sources'])} sources")
+                print(f"{inv['code']}: done, {len(rep['sources'])} sources", flush=True)
+                return True
             except Exception as e:  # report the failure to the app, keep going
-                failures += 1
                 call(base, key, f"/api/investigation/{inv['id']}", {"status": "failed", "error": str(e)})
-                print(f"{inv['code']}: failed: {e}", file=sys.stderr)
-        return 1 if failures else 0
+                print(f"{inv['code']}: failed: {e}", file=sys.stderr, flush=True)
+                return False
+
+        # A deep dive takes a few minutes of mostly waiting on the model and the
+        # web, so a few at once cut a 50-team queue from ~3 h to ~1 h.
+        with ThreadPoolExecutor(max_workers=a.parallel) as pool:
+            ok = list(pool.map(one, queued))
+        return 0 if all(ok) else 1
     except KeyboardInterrupt:
         return 130
     except Exception as e:

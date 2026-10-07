@@ -115,6 +115,7 @@ const ago = (iso) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
 };
+const ord = (n) => `${n}${[11, 12, 13].includes(n % 100) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th")}`;
 const fmt = (x) => (x == null ? "–" : Math.round(x * 10) / 10);
 const teamOf = (c) => STATE.teams[c] || { code: c, name: c, history: {} };
 
@@ -242,7 +243,12 @@ function nextMatchCard(s) {
 
 function standingBlock(s) {
   const st = s.standing, me = st?.me;
-  if (!me) return `<section class="standing empty"><p>Our rank and what we need for the playoffs show up here once ranking matches start on Thursday 8 October.</p></section>`;
+  if (!me) {
+    const pe = s.preEvent;
+    return `<section class="standing empty"><p>Our live rank and the points we need for the playoffs show up here once ranking matches start.</p>
+      ${pe ? `<p class="predline"><b>Before the event:</b> on our own record we're <b>${ord(pe.ownRank)}</b> of ${pe.teams}. Our draw of partners is the <b>${ord(pe.teams + 1 - pe.scheduleRank)} hardest</b> of ${pe.teams}: they average ${pe.partnerStrength} against ${pe.fieldPartnerStrength} for the field. With partners counted we project to <b>${ord(pe.rank)}</b>. To be projected into the top 24, our robot has to play like a team with a past score of about <b>${pe.neededOwn}</b> (ours is ${teamOf(s.our).history.pastScore}).${(() => { const last = (teamOf(s.our).history.seasons || []).slice(-1)[0]; return last ? ` In ${last.year} we finished ${ord(last.rank)} of ${last.of}.` : ""; })()}</p>
+      <p class="note">History-based and weak: it got about 1 in 3 of the top 24 right in past seasons. Historically the #24 team averaged about 1.3 times the event's median score, so watch the median after the first matches.</p>` : ""}</section>`;
+  }
   const goalRow = (g) => {
     if (g.mustBeat == null) return "";
     const label = g.top === 1 ? "Finish first" : g.top === 8 ? "Top 8, alliance captain" : "Top 24, playoffs";

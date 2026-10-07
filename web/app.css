@@ -264,3 +264,26 @@ details.filters > summary { padding: 6px 0; }
 .scoutsum { margin: 14px 2px 0; font-size: 15px; color: var(--steel); }
 .scoutsum a { color: var(--ink); font-weight: 600; }
 .namecard { background: color-mix(in srgb, var(--ember) 10%, var(--sheet)); border-radius: var(--r-block); padding: 4px 16px 14px; margin: 4px 0 12px; }
+
+.nextmatch { display: block; text-decoration: none; background: var(--sheet); border-radius: var(--r-block); padding: 14px 16px 14px 22px; margin: 6px 0 12px; position: relative; overflow: hidden; }
+.nextmatch::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--blue); }
+.nextmatch.red::before { background: var(--red); }
+.nm-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.nm-top b { font: 700 22px var(--display); }
+.nm-top span { font: 700 18px var(--display); color: var(--ember-ink); }
+.nm-mid, .nm-pred { display: block; font-size: 15px; color: var(--steel); margin-top: 4px; }
+.nm-pred { color: var(--ink); }
+.nm-mid .flag { font-size: 18px; width: auto; margin-right: 3px; }
+.mpred { margin: 4px 0; font-size: 15px; }
+.mtime b { color: var(--ember-ink); font-weight: 600; }
+.mtime { text-align: right; }
+.predline { font-size: 15px; margin: 10px 0 2px; }
+.kurac { display: inline-flex; align-items: center; justify-content: center; font: 600 13px var(--display); padding: 2px 8px; border-radius: 999px; background: var(--wash); color: var(--ink); white-space: nowrap; margin-left: 4px; }
+.kurac.big { font-size: 18px; min-width: 2.4em; padding: 4px 10px; }
+.kurac.k1 { background: color-mix(in srgb, var(--good) 18%, var(--sheet)); color: var(--good); }
+.kurac.k2 { background: var(--l1); color: var(--ink); }
+.kurac.k3 { background: var(--l2); color: var(--ink); }
+.kurac.k4 { background: var(--l3); color: #fff; }
+.kurac.k5 { background: var(--l5); color: #fff; }
+.tid { align-items: center; }
+.tid > div { flex: 1; }

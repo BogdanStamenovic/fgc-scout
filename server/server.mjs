@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats } from "./logic.mjs";
+import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats, opr, predictMatch, predictStandings } from "./logic.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const DATA = process.env.SCOUT_DATA || path.join(ROOT, "data");
@@ -43,6 +43,13 @@ const readJson = (f, fallback) => {
   try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return fallback; }
 };
 const history = readJson(path.join(DATA, "history.json"), { teams: {} });
+// IOC code -> country name (REV's 2026 naming table), for teams in the official
+// schedule that the first.global nations page doesn't list (ARG, THA in 2026).
+const COUNTRY = (() => {
+  try {
+    return Object.fromEntries(fs.readFileSync(path.join(ROOT, "research", "country-codes.tsv"), "utf8").trim().split("\n").map((l) => l.split("\t").reverse()));
+  } catch { return {}; }
+})();
 const research = () => readJson(path.join(DATA, "research.json"), { teams: {} });
 const LIVE = path.join(DATA, `live-${YEAR}.json`);
 let live = readJson(LIVE, { fetchedAt: null, data: null, error: null });
@@ -57,7 +64,8 @@ async function pollDetails() {
     const r = await fetch(`https://api.first.global/v1?year=${YEAR}`, { signal: AbortSignal.timeout(60_000) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    stats = { fetchedAt: new Date().toISOString(), teams: teamStats(d.matches || []) };
+    const model = opr(d.matches || []);
+    stats = { fetchedAt: new Date().toISOString(), teams: teamStats(d.matches || []), model, standings: predictStandings(d.matches || [], model) };
     fs.writeFileSync(STATS + ".tmp", JSON.stringify(stats));
     fs.renameSync(STATS + ".tmp", STATS);
   } catch { /* keep last good stats */ }
@@ -137,6 +145,15 @@ function state() {
       investigation: invBy[code] || null,
     };
   }
+  // Every team in the official schedule exists in the app, listed or not.
+  const liveTeams = {};
+  for (const m of (live.data?.matches || [])) for (const pp of m.participants || []) if (pp.country) liveTeams[pp.country] = (pp.countryCode || "").toLowerCase();
+  for (const [code, cc2] of Object.entries(liveTeams)) {
+    if (teams[code]) { if (!teams[code].cc2) teams[code].cc2 = cc2; continue; }
+    teams[code] = { code, name: COUNTRY[code] || code, page: null, cc2, history: { pastScore: null, predictedRank: null, predictedOf: null, seasons: [] },
+      research: res[code] || null, scouted: mergeEntries(byCode[code] || []), entries: (byCode[code] || []).length,
+      photos: photosBy[code] || [], observations: obsBy[code] || [], stats: stats.teams[code] || null, investigation: invBy[code] || null, notListed: true };
+  }
   // Teams we hold data on but that are missing from history.json (a late
   // entry, or a code the nations list spells differently) must still show up.
   for (const code of new Set([...Object.keys(byCode), ...Object.keys(obsBy), ...Object.keys(photosBy)])) {
@@ -149,15 +166,24 @@ function state() {
   const schedule = ourMatches(liveData.matches || [], OUR);
   const ranks = {};
   for (const r of liveData.rankings || []) if (r.team) ranks[r.team.country] = r;
+  const model = stats.model;
   for (const m of schedule) {
     const a = archived[`${m.tournamentKey}-${m.id}`];
     if (a?.details) m.details = a.details;
+    if (!m.played && model?.n) m.prediction = predictMatch({ ourCode: OUR, partners: m.partners, opponents: m.opponents }, model);
+  }
+  if (model?.n) for (const [code, t] of Object.entries(teams)) {
+    if (model.total[code] == null) continue;
+    t.opr = { total: model.total[code], parts: Object.fromEntries(Object.entries(model.components).map(([k, v]) => [k, v[code]]).filter(([, v]) => v != null)) };
   }
   return {
     teams, schedule, ranks, prio: priorityList(teams, schedule, ranks, OUR),
     standing: standing(liveData.rankings || [], liveData.matches || [], OUR),
     alliance: projectedAlliance(liveData.rankings || [], OUR, liveData.alliances_round_robin || []),
     openTags,
+    prediction: model?.n ? { matchesUsed: model.matches, sigma: Math.round(model.sigma), trend: model.trend,
+      ours: (stats.standings || []).find((x) => x.code === OUR) || null, line24: (stats.standings || [])[23]?.predicted ?? null, line8: (stats.standings || [])[7]?.predicted ?? null,
+      top: (stats.standings || []).slice(0, 30) } : null,
   };
 }
 

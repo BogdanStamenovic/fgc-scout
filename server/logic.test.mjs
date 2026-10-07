@@ -167,3 +167,27 @@ test("teamStats maps per-robot fields to the team at that station", () => {
   assert.equal(s.EEE.robot.Climb.nonzeroRate, 50);
   assert.equal(s.BBB.robot.Climb.mean, 0);
 });
+
+import { opr, predictMatch, predictStandings } from "./logic.mjs";
+
+test("OPR recovers known team contributions from simulated alliance scores", () => {
+  // 30 teams with true contributions 5..34, 400 random alliances, small noise
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const codes = Array.from({ length: 30 }, (_, i) => `T${String.fromCharCode(65 + Math.floor(i / 26))}${String.fromCharCode(65 + (i % 26))}`);
+  const truth = Object.fromEntries(codes.map((c, i) => [c, 5 + i]));
+  const matches = [];
+  for (let id = 1; id <= 200; id++) {
+    const pick = [...codes].sort(() => rnd() - 0.5).slice(0, 6);
+    const sc = (t) => t.reduce((s, c) => s + truth[c], 0) + (rnd() - 0.5) * 6;
+    matches.push({ tournamentKey: "t2", id, played: true, redScore: sc(pick.slice(0, 3)), blueScore: sc(pick.slice(3)),
+      participants: pick.map((c, i) => ({ country: c, station: (i < 3 ? 11 : 21) + (i % 3) })), details: { redBalls: 1, blueBalls: 2 } });
+  }
+  const m = opr(matches);
+  const err = codes.map((c) => Math.abs(m.total[c] - truth[c]));
+  assert.ok(Math.max(...err) < 2.5, `max error ${Math.max(...err)}`);
+  assert.deepEqual(Object.keys(m.components), ["Balls"]);
+  const p = predictMatch({ ourCode: codes[29], partners: [codes[28], codes[27]], opponents: [codes[0], codes[1], codes[2]] }, m);
+  assert.ok(p.ours > p.theirs && p.winChance > 95);
+  const st = predictStandings(matches, m);
+  assert.equal(st[0].rank, 1);
+});

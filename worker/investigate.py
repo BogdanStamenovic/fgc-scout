@@ -30,7 +30,9 @@ What we already hold (official results, our scouts' entries, earlier research, c
 Do fresh web research: the team's 2026 posts, videos and news, plus their 2026 match results if any are online. Use only sources you actually opened. Then answer with ONLY this JSON:
 {{"summary":"3-5 sentences: what this robot can do, how good the team likely is, what matters for us as partner or opponent",
  "sections":[{{"title":"Robot capabilities","text":"..."}},{{"title":"Track record","text":"..."}},{{"title":"Strategy and driving","text":"..."}},{{"title":"As our partner / opponent","text":"concrete advice for team Serbia"}},{{"title":"Open questions for our scouts","text":"what to measure or ask in the pits"}}],
+ "kurac":{{"score":1-10,"reasons":["why"],"helpNeeded":["concrete things team Serbia may have to fix or help with on this robot"]}},
  "sources":[{{"url":"https://...","what":"which claim this supports"}}]}}
+The "kurac" score answers: on a scale of 1 to 10, how much of team Serbia's time will it take to help fix or get this robot working if they are our alliance partner? 1 = self-sufficient veteran team with a working robot, 10 = robot likely broken, missing or needing major work. Base it on evidence (reported problems, missing systems, experience, past results, official 2026 match results if any); say "estimate" in the reasons when evidence is thin.
 Rules: never invent. Say "unknown" where nothing was found. Every factual claim must come from the material above or a listed source. Do not include people's names; this is about the robot and the team.
 """
 
@@ -62,6 +64,12 @@ def parse_report(text):
     rep = json.loads(m.group(0))
     if not isinstance(rep.get("summary"), str) or not isinstance(rep.get("sections"), list):
         raise ValueError("report missing summary or sections")
+    k = rep.get("kurac") or {}
+    try:
+        k["score"] = max(1, min(10, int(round(float(k.get("score"))))))
+        rep["kurac"] = {"score": k["score"], "reasons": [str(x) for x in k.get("reasons", [])][:6], "helpNeeded": [str(x) for x in k.get("helpNeeded", [])][:8]}
+    except (TypeError, ValueError):
+        rep.pop("kurac", None)
     rep["sources"] = [s for s in rep.get("sources", []) if isinstance(s, dict) and str(s.get("url", "")).startswith("http")]
     return rep
 

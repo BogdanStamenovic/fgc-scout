@@ -121,8 +121,8 @@ const teamOf = (c) => STATE.teams[c] || { code: c, name: c, history: {} };
 // Robots carry their country flag (rule M08), so the app uses it too: the
 // two-letter code from the official results becomes a flag emoji.
 function flag(code) {
-  const seasons = teamOf(code).history?.seasons || [];
-  const cc = seasons.length ? seasons[seasons.length - 1].cc2 : "";
+  const tm = teamOf(code), seasons = tm.history?.seasons || [];
+  const cc = tm.cc2 || (seasons.length ? seasons[seasons.length - 1].cc2 : "");
   if (!/^[a-z]{2}$/.test(cc || "")) return `<span class="flag flag-none" aria-hidden="true"></span>`;
   const f = String.fromCodePoint(...[...cc.toUpperCase()].map((ch) => 0x1f1a5 + ch.charCodeAt(0)));
   return `<span class="flag" aria-hidden="true">${f}</span>`;
@@ -171,6 +171,44 @@ function relationLine(p) {
   return `<span class="rel vs">Against us in ${esc(r.next)}</span>`;
 }
 
+// ---------- time ----------
+function until(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms < -10 * 60_000) return "played or in progress";
+  if (ms < 60_000) return "starting now";
+  const m = Math.round(ms / 60_000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (d >= 1) return `in ${d} d ${h % 24} h`;
+  return h ? `in ${h} h ${m % 60} min` : `in ${m} min`;
+}
+const clock = (iso) => new Date(iso).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+// Countdowns tick without re-rendering the page.
+setInterval(() => document.querySelectorAll("[data-until]").forEach((el) => (el.textContent = until(el.dataset.until))), 30_000);
+
+// ---------- kurac score: how much of our time a partner's robot will take ----------
+// Opus's judgement from its deep dive when there is one; until then an
+// estimate from what we hold, each part 0..1, weighted, mapped to 1..10.
+const TROUBLE = /\b(broke|broken|break|stuck|dead|disconnect|battery|fell|tipped|loose|not mov|no.?show|fail|repair|issue|problem|malfunction|jam|didn.t move|stopped)/i;
+function kurac(t) {
+  const k = t.investigation?.status === "done" ? t.investigation.report?.kurac : null;
+  if (k?.score) return { score: k.score, source: "Opus deep dive", reasons: k.reasons || [], help: k.helpNeeded || [] };
+  const parts = [], reasons = [];
+  const add = (w, v, why) => { parts.push([w, v]); if (v >= 0.5) reasons.push(why); };
+  const past = t.history?.pastScore;
+  add(0.25, past == null ? 0.6 : 1 - past / 100, past == null ? "no FGC history found" : `past score ${past}/100`);
+  const caps = ["shooter", "intake", "climb"].map((k2) => capState(t, k2).v);
+  add(0.15, caps.reduce((s, v) => s + (v === false ? 1 : v == null ? 0.4 : 0), 0) / 3, "systems missing or unknown");
+  const texts = [...t.scouted.comments.map((c) => c.text), ...(t.observations || []).flatMap((o) => [...(o.facts?.problems || []), ...(o.facts?.badAt || [])])];
+  const hits = texts.filter((x) => TROUBLE.test(x || "")).length;
+  add(0.35, Math.min(1, hits / 3), `${hits} problem report${hits === 1 ? "" : "s"} in notes and commentary`);
+  add(0.1, (t.history?.seasons || []).length === 0 ? 1 : 0, "first FGC season");
+  const og = Object.values(t.stats?.robot || {}).map((r) => r.offGroundRate).find((x) => x != null);
+  if (og != null) add(0.15, 1 - og / 100, `climbs off the ground in only ${og}% of matches`);
+  const w = parts.reduce((s, [a]) => s + a, 0), v = parts.reduce((s, [a, b]) => s + a * b, 0) / w;
+  return { score: Math.max(1, Math.min(10, Math.round(1 + 9 * v))), source: "estimate", reasons, help: [] };
+}
+const kuracBadge = (t) => { const k = kurac(t); return `<span class="kurac k${Math.ceil(k.score / 2)}" title="${esc(k.source)}">Kurac ${k.score}</span>`; };
+const partnerCodes = () => [...new Set(STATE.schedule.flatMap((m) => m.partners))];
+
 // ---------- views ----------
 function showLogin() {
   setScreen("", "Welcome", "");
@@ -190,6 +228,16 @@ function showLogin() {
     location.hash = "#/next";
     refresh();
   };
+}
+
+function nextMatchCard(s) {
+  const m = s.schedule.find((x) => !x.played && new Date(x.scheduledTime).getTime() > Date.now() - 10 * 60_000);
+  if (!m) return "";
+  return `<a class="nextmatch ${m.side}" href="#/matches">
+    <span class="nm-top"><b>${esc(m.name)}</b><span data-until="${esc(m.scheduledTime)}">${until(m.scheduledTime)}</span></span>
+    <span class="nm-mid">${m.side === "red" ? "Red" : "Blue"}, ${clock(m.scheduledTime)}. With ${m.partners.map((c) => `${flag(c)}${esc(teamOf(c).name)}`).join(" and ")}</span>
+    ${m.prediction ? `<span class="nm-pred">Predicted ${m.prediction.ours}–${m.prediction.theirs}, ${m.prediction.winChance}% chance to win</span>` : ""}
+  </a>`;
 }
 
 function standingBlock(s) {
@@ -216,6 +264,7 @@ function standingBlock(s) {
       <div><b>${st.scores.length}</b><span>${st.remaining ? `played, ${st.remaining} left` : "played"}</span></div>
     </div>
     <ul class="goals">${st.goals.map(goalRow).join("")}</ul>
+    ${s.prediction?.ours ? `<p class="predline">Predicted finish: <b>rank ${s.prediction.ours.rank}</b>, ranking score ${s.prediction.ours.predicted}. The top-24 line is predicted at ${s.prediction.line24 ?? "–"}, the top-8 line at ${s.prediction.line8 ?? "–"}.</p>` : ""}
     ${alHtml}
     <details class="fine"><summary>How this is worked out</summary><p>The ranking score is the average of our ranking matches with the lowest one dropped, which matches FIRST Global's official 2025 numbers. "Average needed" assumes every other team stays where it is now, so treat it as a minimum.</p></details>
   </section>`;
@@ -237,6 +286,7 @@ function renderNext() {
   const max = Math.max(...list.map((p) => p.priority), 0.0001);
   view.innerHTML = `
     ${ls.get("scout", "") ? "" : `<section class="namecard"><label class="field"><span>Add your name, so we know who scouted what</span><input id="myname" type="text" autocomplete="name"></label><button class="btn" id="savename">Save name</button></section>`}
+    ${nextMatchCard(s)}
     ${standingBlock(s)}
     <p class="scoutsum"><a href="#/" data-show="scouted" id="seeScouted">${plural(Object.values(s.teams).filter(isScouted).length, "team")} scouted so far</a>, ${plural(Object.values(s.teams).reduce((n, t) => n + (t.photos || []).length, 0), "photo")}.</p>
     <h2 class="sect">Who to measure</h2>
@@ -321,16 +371,22 @@ function renderMatches() {
     view.innerHTML = `<p class="empty-state">FIRST Global publishes the match schedule after robot inspection. This page fills in by itself; last checked ${ago(s.live.fetchedAt)}.${s.live.error ? ` The last check failed: ${esc(s.live.error)}.` : ""}</p>`;
     return;
   }
+  const pc = partnerCodes().map((c) => ({ c, k: kurac(teamOf(c)), next: s.schedule.find((m) => !m.played && m.partners.includes(c)) })).sort((a, b) => b.k.score - a.k.score);
+  const partnersHtml = `<h2 class="sect">Partners by help needed</h2>
+    <p class="note">Kurac score: 1 means self-sufficient, 10 means expect to spend a lot of pit time on their robot. Scores marked "estimate" switch to Opus's judgement as each deep dive finishes.</p>
+    <ol class="rows">${pc.map(({ c, k, next }) => `<li><a class="row" href="#/team/${c}">${flag(c)}<span class="main"><span class="name">${esc(teamOf(c).name)}</span><span class="meta">${next ? `${esc(next.name)}, ${clock(next.scheduledTime)}` : "played"}, ${esc(k.source)}</span></span><span class="kurac big k${Math.ceil(k.score / 2)}">${k.score}</span></a></li>`).join("")}</ol>
+    ${s.prediction ? `<p class="note">Predictions come from ${Math.round(s.prediction.matchesUsed)} official matches so far. Tested on 2025, this way of predicting picked the winner 58–68% of the time; treat it as a lean, not a promise.</p>` : `<p class="note">Score predictions start once official 2026 matches have been played.</p>`}`;
   view.innerHTML = `<ol class="matches">${s.schedule.map((m) => {
     const us = m.side === "red" ? m.redScore : m.blueScore, them = m.side === "red" ? m.blueScore : m.redScore;
     const res = !m.played ? "" : us > them ? "won" : us < them ? "lost" : "tied";
     return `<li class="match ${m.side}">
-      <div class="mhead"><span class="mname">${esc(m.name)}</span><span class="mtime">${esc(new Date(m.scheduledTime).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }))}</span></div>
+      <div class="mhead"><span class="mname">${esc(m.name)}</span><span class="mtime">${clock(m.scheduledTime)}${m.played ? "" : `<br><b data-until="${esc(m.scheduledTime)}">${until(m.scheduledTime)}</b>`}</span></div>
+      ${!m.played && m.prediction ? `<p class="mpred">Predicted <b>${m.prediction.ours}–${m.prediction.theirs}</b>, ${m.prediction.winChance}% chance to win <span class="note">(give or take ${m.prediction.sigma} points)</span></p>` : ""}
       ${m.played ? `<p class="result ${res}"><b>${us}</b><span>–</span><b>${them}</b><em>${res === "won" ? "Won" : res === "lost" ? "Lost" : "Tied"}</em></p>` : ""}
-      <div class="sides"><div><span class="lab">With us</span>${m.partners.map(teamLink).join("")}</div><div><span class="lab">Against</span>${m.opponents.map(teamLink).join("")}</div></div>
+      <div class="sides"><div><span class="lab">With us</span>${m.partners.map((c) => `${teamLink(c)}${kuracBadge(teamOf(c))}`).join("")}</div><div><span class="lab">Against</span>${m.opponents.map(teamLink).join("")}</div></div>
       ${m.details ? `<details class="fine"><summary>Scoring breakdown</summary><table class="kvt">${Object.entries(m.details).filter(([, v]) => typeof v === "number" || typeof v === "boolean").map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table></details>` : ""}
     </li>`;
-  }).join("")}</ol>`;
+  }).join("")}</ol>${partnersHtml}`;
 }
 
 function renderFind() {
@@ -435,8 +491,13 @@ function investigationBlock(t) {
 
 function teamIntel(t) {
   const inv = t.investigation, r = t.research;
+  const k = partnerCodes().includes(t.code) ? kurac(t) : null;
+  const kHtml = k ? `<h3>Kurac score ${k.score} of 10</h3><p class="note">${esc(k.source)}. How much of our pit time their robot is likely to need.</p>
+    ${k.reasons.length ? `<ul class="plain">${k.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${k.help.length ? `<p><b>Help they'll likely need</b></p><ul class="plain">${k.help.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}` : "";
   const rep = inv?.status === "done" ? inv.report || {} : null;
   return `
+    ${kHtml}
     ${rep ? `<article class="report"><h3>Investigation report</h3><p class="lead">${esc(rep.summary || "")}</p>
       ${(rep.sections || []).map((s) => `<details><summary>${esc(s.title)}</summary><p>${esc(s.text)}</p></details>`).join("")}
       ${(rep.sources || []).length ? `<p class="sources">${rep.sources.map((s, i) => `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.what || "")}">Source ${i + 1}</a>`).join("")}</p>` : ""}
@@ -470,6 +531,8 @@ function teamHistory(t) {
         : `<p class="note">${esc(field)} per robot: ${Object.entries(r.distribution).map(([v, n]) => `${esc(v)} ×${n}`).join(", ")}</p>`).join("")}
       <p class="note">From FIRST Global's official per-robot results, updated ${ago(STATE.statsFetchedAt)}.</p>`
       : `<p class="note">No 2026 matches played yet.</p>`}
+    ${t.opr ? `<h3>What they add per match</h3><p>About <b>${Math.round(t.opr.total)}</b> points to their alliance per match, fitted from official scores.</p>
+      ${Object.keys(t.opr.parts).length ? `<table class="kvt">${Object.entries(t.opr.parts).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${Math.round(v * 10) / 10}</td></tr>`).join("")}</table>` : ""}` : ""}
     <h3>Past seasons</h3>
     <p>Past score <b>${t.history.pastScore ?? "–"}</b> of 100, which puts them around rank ${t.history.predictedRank ?? "–"} of ${t.history.predictedOf ?? "–"} this year.</p>
     <p class="note">A rough guide only: tested on past seasons it picked about one in three of the top 24.</p>
@@ -517,7 +580,7 @@ function renderTeam(code) {
   setScreen("", t.name, code);
   view.innerHTML = `
     <header class="team">
-      <div class="tid">${flag(code)}<div>${p?.relation ? relationLine(p) : ""}<p class="tmeta">Past score ${t.history.pastScore ?? "–"} of 100</p></div></div>
+      <div class="tid">${flag(code)}<div>${p?.relation ? relationLine(p) : ""}<p class="tmeta">Past score ${t.history.pastScore ?? "–"} of 100${t.opr ? `, adds about ${Math.round(t.opr.total)} points per match` : ""}</p></div>${partnerCodes().includes(code) ? kuracBadge(t) : ""}</div>
       ${capChips(t)}
     </header>
     <nav class="segs" role="tablist">${SEGMENTS.map(([k, l]) => `<button role="tab" data-seg="${k}" aria-selected="${k === seg}">${l}</button>`).join("")}</nav>

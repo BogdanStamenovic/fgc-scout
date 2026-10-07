@@ -183,6 +183,7 @@ function showLogin() {
       <p class="hint">Install it: in Safari tap Share, then Add to Home Screen. In Chrome open the menu, then Install app.</p>
     </section>`;
   $("#go").onclick = async () => {
+    if (!$("#scout").value.trim()) { toast("Add your name, so we know who scouted what."); $("#scout").focus(); return; }
     ls.set("scout", $("#scout").value.trim());
     const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: $("#key").value }) });
     if (!r.ok) return toast("That key didn't work. Check it with Bogdan.");
@@ -224,6 +225,10 @@ const SCORE_HELP = `<details class="fine"><summary>How teams are ordered</summar
 The bars show how urgently to measure a team, compared with the most urgent one on the list. A team rises when much about it is still unknown, when it is strong, and above all when it plays with or against us soon. Fully measured teams drop off.</p>
 <p>The past score (0 to 100) on team pages is how good a team has been at FGC from 2017 to 2025. It is a weak forecast: on past seasons it picked about one in three of the top 24 correctly.</p></details>`;
 
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-show]");
+  if (a && a.tagName === "A") ls.set("show", a.dataset.show);
+});
 function renderNext() {
   const s = STATE;
   const list = s.prio.filter((p) => p.priority > 0).slice(0, 60);
@@ -231,7 +236,9 @@ function renderNext() {
   setScreen("next", "Measure next", sched.length ? `${sched.length} matches of ours to come` : "Schedule not out yet");
   const max = Math.max(...list.map((p) => p.priority), 0.0001);
   view.innerHTML = `
+    ${ls.get("scout", "") ? "" : `<section class="namecard"><label class="field"><span>Add your name, so we know who scouted what</span><input id="myname" type="text" autocomplete="name"></label><button class="btn" id="savename">Save name</button></section>`}
     ${standingBlock(s)}
+    <p class="scoutsum"><a href="#/" data-show="scouted" id="seeScouted">${plural(Object.values(s.teams).filter(isScouted).length, "team")} scouted so far</a>, ${plural(Object.values(s.teams).reduce((n, t) => n + (t.photos || []).length, 0), "photo")}.</p>
     <h2 class="sect">Who to measure</h2>
     <p class="note">${sched.length ? "Teams in our upcoming matches come first." : "Once the match schedule is out, teams we play with and against move to the top."} Schedule checked ${ago(s.live.fetchedAt)}.</p>
     <ol class="rows">${list.map((p) => `
@@ -244,8 +251,18 @@ function renderNext() {
       </a></li>`).join("") || `<li class="none">Every team is measured. Nice work.</li>`}</ol>
     ${SCORE_HELP}
     <p class="note"><a href="/guide/">Songdo trip guide</a> for the team: entry rules, the 3am arrival, free evenings, food. Anyone can open that link, no key needed.</p>`;
+  wireNameCard();
 }
 
+function wireNameCard() {
+  const b = $("#savename");
+  if (!b) return;
+  b.onclick = () => {
+    const v = $("#myname").value.trim();
+    if (!v) return toast("Type your name first.");
+    ls.set("scout", v); toast(`Thanks, ${v}`); refresh();
+  };
+}
 function progressDots(t) {
   const known = REQUIRED_KEYS.filter((k) => k(t)).length;
   return `<span class="dots" role="img" aria-label="${known} of ${REQUIRED_KEYS.length} measured">${REQUIRED_KEYS.map((k) => `<i class="${k(t) ? "on" : ""}"></i>`).join("")}</span>`;
@@ -257,22 +274,42 @@ const REQUIRED_KEYS = [
   (t) => t.scouted.fields.hookSpace?.has != null, (t) => (t.photos || []).some((p) => p.part === "robot"),
 ];
 
+const scoutedAt = (x) => Math.max(x.scouted.lastTs || 0, ...(x.photos || []).map((p) => p.ts || 0));
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const isScouted = (x) => x.entries > 0 || (x.photos || []).length > 0;
+
 function renderTeams() {
-  setScreen("teams", "Teams", `${Object.keys(STATE.teams).length} at the event`);
+  const all = Object.values(STATE.teams);
+  const done = all.filter(isScouted).length;
+  setScreen("teams", "Teams", `${done} of ${all.length} scouted`);
   const q = ls.get("q", "");
+  let show = ls.get("show", "all");
+  const segs = [["all", `All ${all.length}`], ["scouted", `Scouted ${done}`], ["todo", `Not yet ${all.length - done}`]];
   view.innerHTML = `
+    <div class="filterseg" role="tablist">${segs.map(([k, l]) => `<button role="tab" data-show="${k}" aria-selected="${k === show}">${l}</button>`).join("")}</div>
     <label class="search"><span class="sr">Search teams</span><input id="q" type="search" placeholder="Country or code" value="${esc(q)}"></label>
     <ol class="rows" id="tl"></ol>`;
   const draw = () => {
     const t = $("#q").value.trim().toLowerCase();
     ls.set("q", t);
-    const rows = Object.values(STATE.teams)
-      .filter((x) => !t || x.code.toLowerCase().includes(t) || x.name.toLowerCase().includes(t))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    $("#tl").innerHTML = rows.map((x) => `<li><a class="row" href="#/team/${x.code}">${flag(x.code)}
-      <span class="main"><span class="name">${esc(x.name)}</span><span class="meta">${x.code}</span></span>
-      ${progressDots(x)}<span class="num" title="past score">${x.history.pastScore ?? "–"}</span></a></li>`).join("") || `<li class="none">No team matches “${esc(t)}”.</li>`;
+    let rows = all.filter((x) => !t || x.code.toLowerCase().includes(t) || x.name.toLowerCase().includes(t));
+    if (show === "scouted") rows = rows.filter(isScouted).sort((a, b) => scoutedAt(b) - scoutedAt(a));
+    else if (show === "todo") rows = rows.filter((x) => !isScouted(x)).sort((a, b) => a.name.localeCompare(b.name));
+    else rows = rows.sort((a, b) => a.name.localeCompare(b.name));
+    $("#tl").innerHTML = rows.map((x) => {
+      const meta = isScouted(x)
+        ? `${ago(new Date(scoutedAt(x)).toISOString())}, ${x.photos.length} photo${x.photos.length === 1 ? "" : "s"}${x.scouted.scouts.length ? `, by ${esc(x.scouted.scouts.join(", "))}` : ""}`
+        : x.code;
+      return `<li><a class="row" href="#/team/${x.code}">${flag(x.code)}
+      <span class="main"><span class="name">${esc(x.name)}</span><span class="meta">${meta}</span></span>
+      ${progressDots(x)}<span class="num" title="past score">${x.history.pastScore ?? "–"}</span></a></li>`;
+    }).join("") || `<li class="none">${show === "scouted" && !t ? "Nothing scouted yet." : `No team matches “${esc(t)}”.`}</li>`;
   };
+  view.querySelectorAll(".filterseg button").forEach((b) => (b.onclick = () => {
+    show = b.dataset.show; ls.set("show", show);
+    view.querySelectorAll(".filterseg button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.show === show)));
+    draw();
+  }));
   $("#q").oninput = draw;
   draw();
 }

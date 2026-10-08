@@ -249,6 +249,18 @@ function standingBlock(s) {
       ${pe ? `<p class="predline"><b>Before the event:</b> on our own record we're <b>${ord(pe.ownRank)}</b> of ${pe.teams}. Our draw of partners is the <b>${ord(pe.teams + 1 - pe.scheduleRank)} hardest</b> of ${pe.teams}: they average ${pe.partnerStrength} against ${pe.fieldPartnerStrength} for the field. With partners counted we project to <b>${ord(pe.rank)}</b>. To be projected into the top 24, our robot has to play like a team with a past score of about <b>${pe.neededOwn}</b> (ours is ${teamOf(s.our).history.pastScore}).${(() => { const last = (teamOf(s.our).history.seasons || []).slice(-1)[0]; return last ? ` In ${last.year} we finished ${ord(last.rank)} of ${last.of}.` : ""; })()}</p>
       <p class="note">History-based and weak: it got about 1 in 3 of the top 24 right in past seasons. Historically the #24 team averaged about 1.3 times the event's median score, so watch the median after the first matches.</p>` : ""}</section>`;
   }
+  // Early on (each team has played only a few matches, so dropping the lowest
+  // leaves its single best one) today's lines are inflated: on day 1 of 2026
+  // #24 sat at 2.67x the median against 1.22-1.42x historically. Until then,
+  // "average needed" is measured against the predicted final lines.
+  const early = (me.played || 0) < 5 && s.prediction;
+  const needVs = (line) => {
+    let lo = 0, hi = 5000;
+    for (let i = 0; i < 50; i++) { const x = (lo + hi) / 2, v = [...st.scores, ...Array(st.remaining).fill(x)].sort((a, b) => a - b).slice(1); if (v.reduce((a, b) => a + b, 0) / v.length >= line) hi = x; else lo = x; }
+    return Math.ceil(hi);
+  };
+  if (early) st.goals = st.goals.map((g) => g.top === 24 && s.prediction.line24 != null ? { ...g, mustBeat: s.prediction.line24, need: needVs(s.prediction.line24 + 0.01), predicted: true }
+    : g.top === 8 && s.prediction.line8 != null ? { ...g, mustBeat: s.prediction.line8, need: needVs(s.prediction.line8 + 0.01), predicted: true } : g);
   const goalRow = (g) => {
     if (g.mustBeat == null) return "";
     const label = g.top === 1 ? "Finish first" : g.top === 8 ? "Top 8, alliance captain" : "Top 24, playoffs";
@@ -256,7 +268,7 @@ function standingBlock(s) {
     if (g.done) v = g.reached ? `<span class="ok">Reached</span>` : `<span class="miss">Missed</span>`;
     else if (g.need === 0) v = `<span class="ok">Safe</span>`;
     else if (g.need === Infinity) v = `<span class="miss">Out of reach</span>`;
-    else v = `Average <b>${g.need}</b> in ${st.remaining} left`;
+    else v = `Average <b>${g.need}</b> in ${st.remaining} left${g.predicted ? ` <span class="note">(vs predicted final line ${fmt(g.mustBeat)})</span>` : ""}`;
     return `<li><span>${label}</span><span>${v}</span></li>`;
   };
   const al = s.alliance;

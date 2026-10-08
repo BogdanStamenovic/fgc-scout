@@ -50,6 +50,7 @@ def known_for(team):
     keep = {
         "history": team.get("history"),
         "officialStats2026": team.get("stats"),
+        "pointsAddedPerMatch2026": team.get("opr"),
         "research": team.get("research"),
         "scouted": team.get("scouted", {}).get("fields"),
         "scoutComments": [c["text"] for c in team.get("scouted", {}).get("comments", [])][:40],

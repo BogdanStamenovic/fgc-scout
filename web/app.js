@@ -207,7 +207,7 @@ function kurac(t) {
   const w = parts.reduce((s, [a]) => s + a, 0), v = parts.reduce((s, [a, b]) => s + a * b, 0) / w;
   return { score: Math.max(1, Math.min(10, Math.round(1 + 9 * v))), source: "estimate", reasons, help: [] };
 }
-const kuracBadge = (t) => { const k = kurac(t); return `<span class="kurac k${Math.ceil(k.score / 2)}" title="${esc(k.source)}">Kurac ${k.score}</span>`; };
+const kuracBadge = (t) => { const k = kurac(t); return `<span class="kurac k${Math.ceil(k.score / 2)}" title="${esc(k.source)}">Help ${k.score}</span>`; };
 const partnerCodes = () => [...new Set(STATE.schedule.flatMap((m) => m.partners))];
 
 // ---------- views ----------
@@ -379,7 +379,7 @@ function renderMatches() {
   }
   const pc = partnerCodes().map((c) => ({ c, k: kurac(teamOf(c)), next: s.schedule.find((m) => !m.played && m.partners.includes(c)) })).sort((a, b) => b.k.score - a.k.score);
   const partnersHtml = `<h2 class="sect">Partners by help needed</h2>
-    <p class="note">Kurac score: 1 means self-sufficient, 10 means expect to spend a lot of pit time on their robot. Scores marked "estimate" switch to Opus's judgement as each deep dive finishes.</p>
+    <p class="note">Help score: 1 means self-sufficient, 10 means expect to spend a lot of pit time on their robot. Scores marked "estimate" switch to Opus's judgement as each deep dive finishes.</p>
     <ol class="rows">${pc.map(({ c, k, next }) => `<li><a class="row" href="#/team/${c}">${flag(c)}<span class="main"><span class="name">${esc(teamOf(c).name)}</span><span class="meta">${next ? `${esc(next.name)}, ${clock(next.scheduledTime)}` : "played"}, ${esc(k.source)}</span></span><span class="kurac big k${Math.ceil(k.score / 2)}">${k.score}</span></a></li>`).join("")}</ol>
     ${s.prediction ? `<p class="note">Predictions come from ${Math.round(s.prediction.matchesUsed)} official matches so far. Tested on 2025, this way of predicting picked the winner 58–68% of the time; treat it as a lean, not a promise.</p>` : `<p class="note">Score predictions start once official 2026 matches have been played.</p>`}`;
   view.innerHTML = `<ol class="matches">${s.schedule.map((m) => {
@@ -498,7 +498,7 @@ function investigationBlock(t) {
 function teamIntel(t) {
   const inv = t.investigation, r = t.research;
   const k = partnerCodes().includes(t.code) ? kurac(t) : null;
-  const kHtml = k ? `<h3>Kurac score ${k.score} of 10</h3><p class="note">${esc(k.source)}. How much of our pit time their robot is likely to need.</p>
+  const kHtml = k ? `<h3>Help score ${k.score} of 10</h3><p class="note">${esc(k.source)}. How much of our pit time their robot is likely to need.</p>
     ${k.reasons.length ? `<ul class="plain">${k.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${k.help.length ? `<p><b>Help they'll likely need</b></p><ul class="plain">${k.help.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}` : "";
   const rep = inv?.status === "done" ? inv.report || {} : null;

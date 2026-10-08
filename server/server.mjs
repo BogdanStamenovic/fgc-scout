@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats, opr, predictMatch, predictStandings, preEventProjection } from "./logic.mjs";
+import { priorityList, mergeEntries, ourMatches, standing, projectedAlliance, matchesOfInterest, teamStats, opr, predictMatch, predictStandings, preEventProjection, liveStats, LIVE_KINDS } from "./logic.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const DATA = process.env.SCOUT_DATA || path.join(ROOT, "data");
@@ -34,6 +34,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS matches (key TEXT PRIMARY KEY, fetched INTEGER NOT NULL, body TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS investigations (id TEXT PRIMARY KEY, code TEXT NOT NULL, ts INTEGER NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS tags (id TEXT PRIMARY KEY, matchKey TEXT, ts INTEGER NOT NULL, priority REAL, body TEXT NOT NULL, answer TEXT, answeredBy TEXT, answeredTs INTEGER);
+  CREATE TABLE IF NOT EXISTS live (id TEXT PRIMARY KEY, matchKey TEXT NOT NULL, code TEXT NOT NULL, kind TEXT NOT NULL, value REAL, t REAL, scout TEXT, ts INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS entries_code ON entries(code);
   CREATE INDEX IF NOT EXISTS obs_code ON observations(code);
   CREATE INDEX IF NOT EXISTS photos_code ON photos(code);
@@ -127,6 +128,7 @@ function state() {
   const res = research().teams || {};
   const obsBy = {};
   for (const o of db.prepare("SELECT code, body FROM observations ORDER BY ts DESC").all()) (obsBy[o.code] ??= []).push(JSON.parse(o.body));
+  const live_ = liveStats(db.prepare("SELECT matchKey, code, kind, value, t, ts FROM live").all());
   const invBy = {};
   for (const r of db.prepare("SELECT code, body FROM investigations ORDER BY ts").all()) invBy[r.code] = JSON.parse(r.body);
   const openTags = db.prepare("SELECT COUNT(*) AS n FROM tags WHERE answer IS NULL").get().n;
@@ -143,6 +145,7 @@ function state() {
       observations: obsBy[code] || [],
       stats: stats.teams[code] || null,
       investigation: invBy[code] || null,
+      live: live_[code] || null,
     };
   }
   // Every team in the official schedule exists in the app, listed or not.
@@ -182,6 +185,16 @@ function state() {
     alliance: projectedAlliance(liveData.rankings || [], OUR, liveData.alliances_round_robin || []),
     openTags,
     preEvent: preEventProjection(liveData.matches || [], history.teams, OUR),
+    // Matches to tag from the stands: the ones closest to now, any field.
+    liveMatches: (liveData.matches || []).filter((m) => m.tournamentKey !== "t99")
+      .map((m) => ({ key: `${m.tournamentKey}-${m.id}`, name: m.name, field: m.field ?? null, scheduledTime: m.scheduledTime, played: !!m.played,
+        red: (m.participants || []).filter((p) => p.station < 20 && p.station % 10 <= 4).map((p) => p.country),
+        blue: (m.participants || []).filter((p) => p.station > 20 && p.station % 10 <= 4).map((p) => p.country),
+        ours: (m.participants || []).some((p) => p.country === OUR) }))
+      .sort((a, b) => String(a.scheduledTime).localeCompare(String(b.scheduledTime)))
+      // the last few played (to finish tagging) and the next ones coming up
+      .filter((m, i, all) => { const first = all.findIndex((x) => !x.played); const k = first < 0 ? all.length : first; return i >= k - 6 && i < k + 14; }),
+    liveMine: db.prepare("SELECT id, matchKey, code, kind, value, t FROM live WHERE ts > ? ORDER BY ts").all(Date.now() - 6 * 3600_000),
     prediction: model?.n ? { matchesUsed: model.matches, sigma: Math.round(model.sigma), trend: model.trend,
       ours: (stats.standings || []).find((x) => x.code === OUR) || null, line24: (stats.standings || [])[23]?.predicted ?? null, line8: (stats.standings || [])[7]?.predicted ?? null,
       top: (stats.standings || []).slice(0, 30) } : null,
@@ -333,6 +346,20 @@ async function handle(req, res) {
       return send(res, 200, { ok: true, recorded: r.changes === 1 });
     }
 
+    if (p === "/api/live" && req.method === "POST") {
+      const e = JSON.parse((await body(req, 4096)).toString());
+      if (!ID.test(e.id || "") || !CODE.test(e.code || "") || !LIVE_KINDS.includes(e.kind) || !/^t\d+-\d+$/.test(e.matchKey || ""))
+        return send(res, 400, { error: "bad id, code, kind or matchKey" });
+      db.prepare("INSERT OR IGNORE INTO live (id, matchKey, code, kind, value, t, scout, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(e.id, e.matchKey, e.code, e.kind, Number.isFinite(e.value) ? e.value : null, Number.isFinite(e.t) ? e.t : null, String(e.scout || "").slice(0, 60), Number(e.ts) || Date.now());
+      return send(res, 200, { ok: true });
+    }
+    if (p === "/api/live-undo" && req.method === "POST") {
+      const e = JSON.parse((await body(req, 1024)).toString());
+      if (!ID.test(e.id || "")) return send(res, 400, { error: "bad id" });
+      db.prepare("DELETE FROM live WHERE id = ?").run(e.id);
+      return send(res, 200, { ok: true });
+    }
     if (p === "/api/entry" && req.method === "POST") {
       const e = JSON.parse((await body(req, 64 * 1024)).toString());
       if (!ID.test(e.id || "") || !CODE.test(e.code || "")) return send(res, 400, { error: "bad id or code" });

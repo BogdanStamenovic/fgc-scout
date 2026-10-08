@@ -191,3 +191,20 @@ test("OPR recovers known team contributions from simulated alliance scores", () 
   const st = predictStandings(matches, m);
   assert.equal(st[0].rank, 1);
 });
+
+import { liveStats } from "./logic.mjs";
+
+test("liveStats aggregates taps per team and keeps the latest climb per match", () => {
+  const ev = (code, matchKey, kind, value, t, ts) => ({ code, matchKey, kind, value, t, ts });
+  const s = liveStats([
+    ev("AAA", "t2-1", "shot", null, 20, 1), ev("AAA", "t2-1", "shot", null, 30, 2), ev("AAA", "t2-1", "miss", null, 40, 3),
+    ev("AAA", "t2-1", "climb", 2, 130, 4), ev("AAA", "t2-1", "climb", 3, 135, 5),
+    ev("AAA", "t2-9", "shot", null, 25, 6), ev("AAA", "t2-9", "broke", null, 60, 7), ev("BBB", "t2-1", "feed", null, 10, 8),
+  ]);
+  assert.equal(s.AAA.matches, 2);
+  assert.equal(s.AAA.shotsPerMatch, 1.5);
+  assert.equal(s.AAA.accuracy, 75);
+  assert.equal(s.AAA.breakdowns, 1);
+  assert.deepEqual(s.AAA.climbs, [{ matchKey: "t2-1", zone: 3, t: 135 }]);
+  assert.equal(s.BBB.feedsPerMatch, 1);
+});

@@ -419,3 +419,33 @@ export function preEventProjection(matches, history, our) {
     fieldPartnerStrength: Math.round(partnerAvg * 100) / 100, scheduleRank: luck.indexOf(our) + 1,
     neededOwn: Math.round((est(our) + (line24 - mean(A[our]))) * 100) };
 }
+
+// ---------- live tagging from the stands ----------
+// Scouts tap events per robot while watching. Aggregated per team; a match
+// counts as tagged for a team once it has any event there.
+export const LIVE_KINDS = ["shot", "miss", "feed", "climb", "broke"];
+export function liveStats(events) {
+  const T = {};
+  for (const e of events) {
+    const t = (T[e.code] ??= { matches: new Set(), shot: 0, miss: 0, feed: 0, broke: 0, climbs: {} });
+    t.matches.add(e.matchKey);
+    if (e.kind === "climb") {
+      // the last climb tap per match wins (a scout may correct 2 -> 3)
+      const prev = t.climbs[e.matchKey];
+      if (!prev || (e.ts ?? 0) >= prev.ts) t.climbs[e.matchKey] = { zone: e.value, t: e.t ?? null, ts: e.ts ?? 0 };
+    } else if (t[e.kind] != null) t[e.kind] += 1;
+  }
+  const out = {};
+  for (const [code, t] of Object.entries(T)) {
+    const n = t.matches.size, tries = t.shot + t.miss;
+    const climbs = Object.entries(t.climbs).map(([matchKey, c]) => ({ matchKey, zone: c.zone, t: c.t }));
+    const timed = climbs.filter((c) => c.t != null);
+    out[code] = {
+      matches: n, shotsPerMatch: Math.round((t.shot / n) * 10) / 10, missesPerMatch: Math.round((t.miss / n) * 10) / 10,
+      accuracy: tries ? Math.round((100 * t.shot) / tries) : null, feedsPerMatch: Math.round((t.feed / n) * 10) / 10,
+      breakdowns: t.broke, climbs,
+      avgClimbAt: timed.length ? Math.round(timed.reduce((s, c) => s + c.t, 0) / timed.length) : null,
+    };
+  }
+  return out;
+}

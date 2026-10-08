@@ -67,6 +67,10 @@ async function flush() {
       try {
         if (item.kind === "entry") {
           await api("/api/entry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) });
+        } else if (item.kind === "live") {
+          await api("/api/live", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) });
+        } else if (item.kind === "liveUndo") {
+          await api("/api/live-undo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.target }) });
         } else if (item.kind === "photo") {
           const q = new URLSearchParams({ id: item.id, code: item.code, part: item.part, scout: item.scout || "" });
           await api(`/api/photo?${q}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: item.blob });
@@ -476,6 +480,91 @@ async function renderTag() {
   }));
 }
 
+// ---------- live tagging ----------
+const LIVE_BTNS = [["shot", "In"], ["miss", "Miss"], ["feed", "Port"], ["broke", "Broke"]];
+function pickLiveMatch(s) {
+  const saved = ls.get("liveMatch", "");
+  if (s.liveMatches.some((m) => m.key === saved)) return saved;
+  const now = Date.now();
+  const ours = s.liveMatches.find((m) => m.ours && !m.played && Math.abs(new Date(m.scheduledTime) - now) < 30 * 60_000);
+  const next = s.liveMatches.find((m) => !m.played && new Date(m.scheduledTime) > now - 5 * 60_000);
+  return (ours || next || s.liveMatches[0] || {}).key || "";
+}
+async function liveEvents(matchKey) {
+  // This phone's own taps are kept locally too: once synced they leave the
+  // outbox, and the server list in STATE is only as fresh as the last refresh.
+  const mine = ls.get(`liveLog:${matchKey}`, []);
+  const server = [...mine, ...(STATE.liveMine || []).filter((e) => e.matchKey === matchKey)];
+  const pending = (await outboxAll()).filter((x) => x.kind === "live" && x.payload.matchKey === matchKey).map((x) => x.payload);
+  const undone = new Set((await outboxAll()).filter((x) => x.kind === "liveUndo").map((x) => x.target));
+  const seen = new Set();
+  return [...server, ...pending].filter((e) => !undone.has(e.id) && !seen.has(e.id) && seen.add(e.id));
+}
+async function renderLive() {
+  const s = STATE;
+  setScreen("live", "Live match", "Tag robots while you watch");
+  if (!s.liveMatches?.length) { view.innerHTML = `<p class="empty-state">No matches scheduled right now.</p>`; return; }
+  const key = pickLiveMatch(s);
+  const m = s.liveMatches.find((x) => x.key === key);
+  const clockKey = `clock:${key}`;
+  const started = ls.get(clockKey, null);
+  const evs = await liveEvents(key);
+  const count = (code, kind) => evs.filter((e) => e.code === code && e.kind === kind).length;
+  const climbOf = (code) => { const c = evs.filter((e) => e.code === code && e.kind === "climb").pop(); return c ? c.value : null; };
+  const tile = (code, side) => `<div class="ltile ${side}" data-code="${code}">
+      <div class="lhead">${flag(code)}<b>${esc(teamOf(code).name)}</b></div>
+      <div class="lcount"><span>${count(code, "shot")} in</span><span>${count(code, "miss")} miss</span><span>${count(code, "feed")} port</span>${count(code, "broke") ? `<span class="bad">broke</span>` : ""}</div>
+      <div class="lbtns">${LIVE_BTNS.map(([k, l]) => `<button data-k="${k}" class="${k}">${l}</button>`).join("")}</div>
+      <div class="lclimb"><span>Climb</span>${[["0.05", "Touch"], ["1", "1"], ["2", "2"], ["3", "3"]].map(([v, l]) => `<button data-k="climb" data-v="${v}" aria-pressed="${String(climbOf(code)) === v}">${l}</button>`).join("")}</div>
+    </div>`;
+  view.innerHTML = `
+    <label class="field"><span>Match</span><select id="lm">${s.liveMatches.map((x) => `<option value="${x.key}" ${x.key === key ? "selected" : ""}>${esc(x.name)}${x.field ? `, field ${x.field}` : ""}, ${clock(x.scheduledTime)}${x.ours ? ", ours" : ""}${x.played ? ", played" : ""}</option>`).join("")}</select></label>
+    <div class="lclock"><b id="lc">${started ? "" : "2:30"}</b><button class="btn" id="lstart">${started ? "Restart clock" : "Start at “go”"}</button><button class="btn ghost" id="lundo">Undo last</button></div>
+    <div class="lgrid"><div>${m.red.map((c) => tile(c, "red")).join("")}</div><div>${m.blue.map((c) => tile(c, "blue")).join("")}</div></div>
+    <p class="note">Tap as it happens. "In" = ball scored in the suppression unit, "Port" = pushed into the fire shield. Saved on your phone and synced, so no signal is fine. Two scouts can tag the same match.</p>`;
+  const tick = () => {
+    const st = ls.get(clockKey, null), el = $("#lc");
+    if (!el || !st) return;
+    const left = Math.max(0, 150 - (Date.now() - st) / 1000);
+    el.textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+  };
+  tick();
+  clearInterval(window.__liveTick); window.__liveTick = setInterval(tick, 500);
+  $("#lm").onchange = (e) => { ls.set("liveMatch", e.target.value); renderLive(); };
+  $("#lstart").onclick = () => { ls.set(clockKey, Date.now()); renderLive(); };
+  $("#lundo").onclick = async () => {
+    const stack = ls.get(`liveStack:${key}`, []);
+    const id = stack.pop();
+    if (!id) return toast("Nothing to undo");
+    ls.set(`liveStack:${key}`, stack);
+    const pend = (await outboxAll()).find((x) => x.kind === "live" && x.payload.id === id);
+    if (pend) await outboxDel(pend.id); else await outboxPut({ id: uid(), kind: "liveUndo", target: id });
+    ls.set(`liveLog:${key}`, ls.get(`liveLog:${key}`, []).filter((e) => e.id !== id));
+    if (STATE.liveMine) STATE.liveMine = STATE.liveMine.filter((e) => e.id !== id);
+    toast("Undone"); flush(); renderLive();
+  };
+  view.querySelectorAll(".ltile button").forEach((b) => (b.onclick = async () => {
+    const code = b.closest(".ltile").dataset.code;
+    const st = ls.get(clockKey, null);
+    const payload = { id: uid(), matchKey: key, code, kind: b.dataset.k, value: b.dataset.v ? Number(b.dataset.v) : null,
+      t: st ? Math.round((Date.now() - st) / 1000) : null, scout: ls.get("scout", ""), ts: Date.now() };
+    await outboxPut({ id: payload.id, kind: "live", payload });
+    ls.set(`liveStack:${key}`, [...ls.get(`liveStack:${key}`, []), payload.id].slice(-50));
+    ls.set(`liveLog:${key}`, [...ls.get(`liveLog:${key}`, []), payload].slice(-400));
+    if (navigator.vibrate) navigator.vibrate(15);
+    flush(); renderLive();
+  }));
+}
+
+function liveBlock(t) {
+  const L = t.live;
+  if (!L) return "";
+  const zone = (z) => (z === 0.05 ? "touch" : `zone ${z}`);
+  return `<h3>Tagged from the stands</h3>
+    <p>${L.matches} match${L.matches === 1 ? "" : "es"} tagged by our scouts: <b>${L.shotsPerMatch}</b> balls in per match${L.accuracy != null ? `, ${L.accuracy}% of shots in` : ""}, ${L.feedsPerMatch} pushed to the port${L.breakdowns ? `, <span class="bad">broke down ${L.breakdowns}×</span>` : ""}.</p>
+    ${L.climbs.length ? `<p class="note">Climbs: ${L.climbs.map((c) => `${esc(c.matchKey)} ${zone(c.zone)}${c.t != null ? ` at ${Math.floor(c.t / 60)}:${String(c.t % 60).padStart(2, "0")}` : ""}`).join("; ")}.</p>` : ""}`;
+}
+
 // ---------- team page ----------
 const SEGMENTS = [["overview", "Overview"], ["scout", "Scout"], ["intel", "Intel"], ["history", "History"]];
 
@@ -542,6 +631,7 @@ const investigationAskOnly = (t) => `<div class="invask"><label class="field"><s
 function teamHistory(t) {
   const s = t.stats;
   return `
+    ${liveBlock(t)}
     <h3>This season, official</h3>
     ${s ? `<p>${s.played} ranking matches, alliance average ${s.avgAllianceScore ?? "–"} points.</p>
       ${Object.entries(s.robot).map(([field, r]) => r.levels
@@ -680,6 +770,7 @@ async function refresh() {
   else if (h === "#/matches") renderMatches();
   else if (h === "#/find") renderFind();
   else if (h === "#/tag") renderTag();
+  else if (h === "#/live") renderLive();
   else if (h === "#/") renderTeams();
   else renderNext();
   syncBadge();

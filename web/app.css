@@ -258,7 +258,7 @@ details.filters > summary { padding: 6px 0; }
 .hint { color: var(--steel); font-size: 14px; margin-top: 16px; }
 .toast { position: fixed; left: 20px; right: 20px; bottom: calc(86px + env(safe-area-inset-bottom)); padding: 13px 16px; border-radius: var(--r-ctl); background: var(--ink); color: var(--paper); text-align: center; z-index: 20; font-weight: 500; }
 
-.filterseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--wash); border-radius: var(--r-ctl); padding: 3px; margin: 2px 0 10px; }
+.filterseg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--wash); border-radius: var(--r-ctl); padding: 3px; margin: 2px 0 10px; }
 .filterseg button { min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--steel); font-weight: 600; cursor: pointer; font-size: 15px; }
 .filterseg button[aria-selected=true] { background: var(--sheet); color: var(--ink); box-shadow: 0 1px 0 var(--rule); }
 .scoutsum { margin: 14px 2px 0; font-size: 15px; color: var(--steel); }

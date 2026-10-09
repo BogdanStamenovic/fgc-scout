@@ -335,8 +335,14 @@ function rows(matches) {
 // 22.9/19.4/21.3 vs 23.2/21.2/21.8 for "everyone scores the recent average".
 // Scores rise during an event as teams improve, hence the trend factor
 // (mean of the last 30 matches / overall mean) on predicted scores.
-export function opr(matches, lambda = 4) {
-  const R = rows([...matches].sort((a, b) => (a.id ?? 0) - (b.id ?? 0)));
+export function opr(matches, lambda = 4, opts = {}) {
+  let R = rows([...matches].sort((a, b) => (a.id ?? 0) - (b.id ?? 0)));
+  // NCMK: leave out alliances that contain a superstar team, so nobody is
+  // credited with a superstar's points. Scoring is multiplicative (balls x
+  // climb multiplier), so a weak climber next to a superstar scorer looks far
+  // better than it is in an additive fit.
+  if (opts.exclude?.length) R = R.filter((r) => !r.teams.some((c) => opts.exclude.includes(c)));
+  if (opts.rowFilter) R = R.filter(opts.rowFilter);
   if (!R.length) return { n: 0, total: {}, components: {}, sigma: null };
   const codes = [...new Set(R.flatMap((r) => r.teams))].sort();
   const idx = Object.fromEntries(codes.map((c, i) => [c, i]));

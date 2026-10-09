@@ -352,7 +352,7 @@ function renderTeams() {
   setScreen("teams", "Teams", `${done} of ${all.length} scouted`);
   const q = ls.get("q", "");
   let show = ls.get("show", "all");
-  const segs = [["all", `All ${all.length}`], ["scouted", `Scouted ${done}`], ["todo", `Not yet ${all.length - done}`]];
+  const segs = [["all", `All ${all.length}`], ["best", "Best"], ["scouted", `Scouted ${done}`], ["todo", `Not yet ${all.length - done}`]];
   view.innerHTML = `
     <div class="filterseg" role="tablist">${segs.map(([k, l]) => `<button role="tab" data-show="${k}" aria-selected="${k === show}">${l}</button>`).join("")}</div>
     <label class="search"><span class="sr">Search teams</span><input id="q" type="search" placeholder="Country or code" value="${esc(q)}"></label>
@@ -363,6 +363,7 @@ function renderTeams() {
     let rows = all.filter((x) => !t || x.code.toLowerCase().includes(t) || x.name.toLowerCase().includes(t));
     if (show === "scouted") rows = rows.filter(isScouted).sort((a, b) => scoutedAt(b) - scoutedAt(a));
     else if (show === "todo") rows = rows.filter((x) => !isScouted(x)).sort((a, b) => a.name.localeCompare(b.name));
+    else if (show === "best") rows = rows.filter((x) => x.ncmk).sort((a, b) => b.ncmk.value - a.ncmk.value);
     else rows = rows.sort((a, b) => a.name.localeCompare(b.name));
     $("#tl").innerHTML = rows.map((x) => {
       const meta = isScouted(x)
@@ -370,7 +371,7 @@ function renderTeams() {
         : x.code;
       return `<li><a class="row" href="#/team/${x.code}">${flag(x.code)}
       <span class="main"><span class="name">${esc(x.name)}</span><span class="meta">${meta}</span></span>
-      ${progressDots(x)}<span class="num" title="past score">${x.history.pastScore ?? "–"}</span></a></li>`;
+      ${progressDots(x)}<span class="num" title="${x.ncmk ? "NCMK: real points per match" : "past score"}">${x.ncmk ? Math.round(x.ncmk.value) : x.history.pastScore ?? "–"}</span></a></li>`;
     }).join("") || `<li class="none">${show === "scouted" && !t ? "Nothing scouted yet." : `No team matches “${esc(t)}”.`}</li>`;
   };
   view.querySelectorAll(".filterseg button").forEach((b) => (b.onclick = () => {
@@ -549,7 +550,10 @@ function teamHistory(t) {
         : `<p class="note">${esc(field)} per robot: ${Object.entries(r.distribution).map(([v, n]) => `${esc(v)} ×${n}`).join(", ")}</p>`).join("")}
       <p class="note">From FIRST Global's official per-robot results, updated ${ago(STATE.statsFetchedAt)}.</p>`
       : `<p class="note">No 2026 matches played yet.</p>`}
-    ${t.opr ? `<h3>What they add per match</h3><p>About <b>${Math.round(t.opr.total)}</b> points to their alliance per match, fitted from official scores.</p>
+    ${t.ncmk ? `<h3>Real value (NCMK)</h3><p><b>${Math.round(t.ncmk.value)}</b> points per match${t.ncmk.superstar ? ", as one of the superstar teams the score leaves out" : ""}.
+      ${!t.ncmk.superstar && t.ncmk.plain != null ? ` The plain fit says ${Math.round(t.ncmk.plain)}: ${Math.abs(t.ncmk.plain - t.ncmk.value) < 3 ? "about the same" : t.ncmk.plain > t.ncmk.value ? `<b>inflated by ${Math.round(t.ncmk.plain - t.ncmk.value)}</b>` : `<b>underrated by ${Math.round(t.ncmk.value - t.ncmk.plain)}</b>`}${t.ncmk.withSuperstars ? `, ${t.ncmk.withSuperstars} of their matches were alongside a superstar` : ""}.` : ""}</p>
+      <p class="note">NCMK = "no China, Mexico, Kazakhstan" (and Uzbekistan, which is as strong). Each team's points are fitted from official scores of alliances without those four, so nobody gets credit for a superstar's balls. On this year's matches it predicts normal alliances better than the plain fit (error 52 vs 60 points).</p>` : ""}
+    ${t.opr ? `<h3>Points added per match, plain fit</h3><p>About <b>${Math.round(t.opr.total)}</b> points to their alliance per match.</p>
       ${Object.keys(t.opr.parts).length ? `<table class="kvt">${Object.entries(t.opr.parts).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${Math.round(v * 10) / 10}</td></tr>`).join("")}</table>` : ""}` : ""}
     <h3>Past seasons</h3>
     <p>Past score <b>${t.history.pastScore ?? "–"}</b> of 100, which puts them around rank ${t.history.predictedRank ?? "–"} of ${t.history.predictedOf ?? "–"} this year.</p>
@@ -598,7 +602,7 @@ function renderTeam(code) {
   setScreen("", t.name, code);
   view.innerHTML = `
     <header class="team">
-      <div class="tid">${flag(code)}<div>${p?.relation ? relationLine(p) : ""}<p class="tmeta">Past score ${t.history.pastScore ?? "–"} of 100${t.opr ? `, adds about ${Math.round(t.opr.total)} points per match` : ""}</p></div>${partnerCodes().includes(code) ? kuracBadge(t) : ""}</div>
+      <div class="tid">${flag(code)}<div>${p?.relation ? relationLine(p) : ""}<p class="tmeta">${t.ncmk ? `<b>NCMK ${Math.round(t.ncmk.value)}</b> real points per match, ` : ""}past score ${t.history.pastScore ?? "–"} of 100</p></div>${partnerCodes().includes(code) ? kuracBadge(t) : ""}</div>
       ${capChips(t)}
     </header>
     <nav class="segs" role="tablist">${SEGMENTS.map(([k, l]) => `<button role="tab" data-seg="${k}" aria-selected="${k === seg}">${l}</button>`).join("")}</nav>
